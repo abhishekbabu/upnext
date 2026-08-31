@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  UV_PYTHON_PREFERENCE: only-managed
+
+jobs:
+  check:
+    name: check (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 is the floor in requires-python; 3.13 is what .python-version
+        # pins locally. Testing only one would let floor-specific breakage
+        # through in whichever direction was not covered.
+        python: ["3.12", "3.13"]
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        # --locked fails if uv.lock is stale relative to pyproject.toml, so a
+        # dependency change that skipped `just lock` cannot land.
+        run: uv sync --locked --python ${{ matrix.python }}
+
+      - name: Lint and format check
+        run: uvx --from rust-just just lint
+
+      - name: Type check
+        run: uvx --from rust-just just typecheck
+
+      - name: Tests and coverage floor
+        # The default suite is hermetic — the TMDB integration test is
+        # deselected by the marker, so CI needs no API key.
+        run: uvx --from rust-just just coverage-gate
+
+  hygiene:
+    name: hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - run: uv sync --locked
+
+      - name: Pre-commit hooks
+        env:
+          # The lint, type and test hooks each have a job above;
+          # no-commit-to-branch is a local guardrail that would fail every
+          # push to main by the time CI sees it.
+          SKIP: no-commit-to-branch,ruff,ruff-format,pyrefly,pytest
+        run: uv run pre-commit run --all-files --show-diff-on-failure

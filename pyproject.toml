@@ -1,0 +1,98 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "upnext"
+version = "0.1.0"
+description = "A personal TV and film watch tracker — a self-hosted replacement for TV Time"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.118.0,<1",
+    "uvicorn[standard]>=0.34.0,<1",
+    "pydantic>=2.7.0,<3",
+    "pydantic-settings>=2.7.0,<3",
+    # The TMDB client catches requests' exception types by name to decide what
+    # is retryable, so it is a direct dependency rather than an inherited one.
+    "requests>=2.32.0,<3",
+    "tenacity>=9.0.0,<10",
+]
+
+[project.scripts]
+upnext = "upnext.cli:main"
+
+[dependency-groups]
+dev = [
+    "pyrefly>=1.1.1,<2",
+    "pytest>=8.0.0,<10",
+    "pytest-cov>=6.0.0,<8",
+    "ruff>=0.15.0,<1",
+    "pre-commit>=4.0.0,<5",
+    # starlette's TestClient deprecated the httpx 0.x backend; httpx2 is what it wants now.
+    "httpx2>=2.0.0,<3",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["upnext*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+upnext = ["store/*.sql"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes (includes F401 unused imports)
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "SIM",    # flake8-simplify
+    "TID252", # ban relative imports
+]
+ignore = [
+    "E501",  # line too long — handled by ruff format
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["upnext"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.coverage.run]
+source = ["upnext"]
+omit = [
+    # Thin shells over uvicorn and argparse dispatch, exercised by hand.
+    "*/__main__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+skip_empty = true
+show_missing = true
+precision = 1
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+markers = [
+    "integration: hits the live TMDB API. Deselected by default; opt in with `-m integration`.",
+]
+# The default run is hermetic: no network, no API key required.
+addopts = "-m 'not integration'"

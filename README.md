@@ -1,0 +1,138 @@
+# upnext
+
+A personal watch tracker — what you're watching, what you've finished, and what
+to put on next. Built to replace [TV Time](https://www.tvtime.com), which shut
+down, and to own the data rather than rent it.
+
+Shows first. Films use the same tables from day one, so adding them is data and
+a second importer, not a migration.
+
+## Where it is
+
+Working today:
+
+- **Import** — a TV Time GDPR export becomes a library, offline, in one command.
+- **Enrichment** — every imported show resolved against TMDB, with real episode
+  lists, artwork, air dates and runtimes.
+- **A read API** — titles by status, a title with its episodes, up-next, stats.
+- **The up-next query** — the next unwatched episode of everything in progress.
+
+Not there yet: the front end, marking things watched from the app, films, and
+anywhere to see this but `curl`. See [Roadmap](#roadmap).
+
+## Getting started
+
+```sh
+just install                       # venv, locked dependencies, git hooks
+cp .env.template .env              # then add a TMDB key (free, no card)
+just import ~/Documents/tv-time-data
+just enrich
+just stats
+just serve                         # http://localhost:8000/docs
+```
+
+The library is a single SQLite file at `~/.upnext/library.db`. Delete it and
+re-import; nothing else holds state.
+
+## Import, then enrich
+
+The two steps are separate on purpose.
+
+**Import** is a pure translation of the export. No network, no API key, and it
+converges on re-runs — the same export imported twice leaves the library
+exactly as it was. It reads five of the export's fifty-odd CSVs:
+
+| File | What it gives |
+| --- | --- |
+| `tracking-prod-records-v2.csv` | every episode watch, and every rewatch |
+| `followed_tv_show.csv` | which shows are followed, and whether archived |
+| `user_show_special_status.csv` | the "for later" list and favourites |
+| `user_tv_show_data.csv` | a per-show seen count |
+| `tv_show_rate.csv` | star ratings |
+
+Everything else in the export is account plumbing — access tokens, IP logs,
+device identifiers, notification history — and is deliberately never read. **The
+export is not safe to commit**: it contains live OAuth tokens. `.gitignore`
+covers the usual folder names and `detect-private-key` runs pre-commit, but the
+export belongs outside the repo.
+
+**Enrich** is where TMDB comes in. TV Time's show ids are TheTVDB ids, and
+TMDB's `/find` endpoint maps one straight to a TMDB id — so enrichment is an
+identity lookup, not a name search, for nearly everything. Name search is the
+fallback, and it is strict: the first result only, and only when the year
+agrees. A show TMDB has never heard of stays in the library exactly as the
+export described it.
+
+TMDB rather than IMDb because IMDb has no free public API; rather than TheTVDB
+because v4 gates most data behind a subscriber PIN. TMDB also covers films,
+which is what lets this grow past shows without a second provider.
+
+### What the statuses mean
+
+TV Time modelled a show with two booleans rather than one state. They translate:
+
+| TV Time | upnext |
+| --- | --- |
+| followed, not archived | `watching` |
+| followed and archived | `completed` — archiving is how TV Time says "seen it all" |
+| unfollowed, with history | `stopped` |
+| "for later" | `watchlist` |
+
+A show with a seen count but no per-episode rows counts as history, not a
+wishlist: TV Time keeps the tally after it drops the detail, and those shows
+were watched.
+
+### Two things the export gets wrong, and what upnext does about them
+
+- **Unnumbered episodes.** TV Time exports some shows with `episode_number` 0 —
+  the whole of Beyblade, in the export this was built against. Those watches are
+  kept against the show with no episode attached, rather than folded into one
+  fictional slot. The viewing count stays honest; the episode list is short.
+- **Bulk marks.** Marking a season watched stamps every episode with the same
+  second, and TV Time can issue two episodes with identical season/episode
+  numbers. A watch is therefore identified by the source's own episode id where
+  there is one, and by episode-plus-timestamp where there is not.
+
+## The API
+
+| Route | What it returns |
+| --- | --- |
+| `GET /api/titles?status=&kind=` | the library, with counted progress per title |
+| `GET /api/titles/{id}` | one title and its episodes, each with a watch count |
+| `GET /api/up-next` | the next unwatched episode of everything in progress |
+| `GET /api/stats` | episodes, titles, date range, runtime, counts by status |
+
+"Next" is the lowest-numbered unwatched episode, not the highest watched plus
+one — the second definition silently swallows a gap when someone skips around.
+Season 0 is specials at every source, so it is never the next thing to watch.
+
+## Development
+
+```sh
+just check              # lint, types, tests, coverage floor — what CI runs
+just fmt                # ruff fix + format
+just test               # the hermetic suite: no network, no key needed
+just test-integration   # the one test that calls TMDB (needs a key)
+```
+
+Layout:
+
+```
+src/upnext/
+  models.py           the vocabulary everything else speaks
+  settings.py         environment and .env
+  cli.py              import / enrich / stats / serve
+  store/              schema.sql, connections, the repository
+  importers/tvtime.py the export reader
+  catalog/            the TMDB client and enrichment
+  web/api.py          the read API
+```
+
+## Roadmap
+
+- A front end — React and Vite, the shelf-and-poster view TV Time had, plus a
+  Letterboxd-ish diary of what was watched when.
+- Writes: mark watched, rate, move between statuses.
+- Films: a second importer and the same tables.
+- Where to watch, from TMDB's providers endpoint.
+- Season-level progress and a "what's airing this week" view.

@@ -1,0 +1,3 @@
+project-includes = ["src"]
+search-path = ["src"]
+python-version = "3.12"

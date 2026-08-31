@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local state
+.env
+data/
+*.db
+*.sqlite3
+.cache/
+
+# The TV Time export itself never belongs in the repo: alongside the viewing
+# history it carries live OAuth tokens, session IDs and IP logs.
+tv-time-data/
+tv-time-export/
+
+# Front end (scaffolded later)
+node_modules/
+dist/
+
+.DS_Store
