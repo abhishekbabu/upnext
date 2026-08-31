@@ -59,11 +59,24 @@ class TitleSummary(BaseModel):
     status: Status | None = None
     is_favorite: bool = False
     rating: int | None = None
+
     episodes_watched: int = 0
+    """Distinct episodes watched that TMDB's list contains, specials excluded.
+    The figure `total_episodes` is comparable to."""
+
+    unmatched_watched: int = 0
+    """Distinct episodes watched that TMDB's list does not contain, counted by
+    what the export called them. Real viewings of something TMDB numbers
+    differently — the two together are the whole history."""
+
+    enriched_at: str | None = None
+    """Null until TMDB has answered for this title, which is what tells "TMDB
+    does not list these" apart from "there is no list yet"."""
+
     last_watched_at: str | None = None
 
 
-class EpisodeRow(BaseModel):
+class TitleEpisode(BaseModel):
     """One episode of a title, with how often it has been watched."""
 
     id: int
@@ -78,6 +91,20 @@ class EpisodeRow(BaseModel):
     last_watched_at: str | None = None
 
 
+class UnmatchedViewing(BaseModel):
+    """Viewings of an episode TMDB's list does not contain.
+
+    Rendered apart from the episode list rather than mixed into it: they are
+    not episodes of this show as TMDB understands it, and putting them in the
+    list would be putting the export's numbering back into the catalog's.
+    """
+
+    season_number: int
+    episode_number: int
+    watch_count: int
+    last_watched_at: str | None = None
+
+
 class TitleDetail(TitleSummary):
     overview: str | None = None
     backdrop_path: str | None = None
@@ -86,7 +113,8 @@ class TitleDetail(TitleSummary):
     runtime: int | None = None
     tmdb_id: int | None = None
     imdb_id: str | None = None
-    episodes: list[EpisodeRow] = []
+    episodes: list[TitleEpisode] = []
+    unmatched: list[UnmatchedViewing] = []
 
 
 class UpNextItem(BaseModel):
@@ -165,7 +193,10 @@ def get_title(title_id: int, library: LibraryDep) -> TitleDetail:
     if title is None:
         raise HTTPException(status_code=404, detail="No such title")
     detail = TitleDetail.model_validate(title, from_attributes=True)
-    detail.episodes = [EpisodeRow.model_validate(dict(row)) for row in library.episodes(title_id)]
+    detail.episodes = [TitleEpisode.model_validate(row, from_attributes=True) for row in library.episodes(title_id)]
+    detail.unmatched = [
+        UnmatchedViewing.model_validate(row, from_attributes=True) for row in library.unmatched_watches(title_id)
+    ]
     return detail
 
 

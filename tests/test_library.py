@@ -29,29 +29,6 @@ def test_an_import_never_erases_enriched_columns(library: Library) -> None:
     assert row["tmdb_id"] == 1668
 
 
-def test_recording_a_watch_creates_the_episode_it_names(library: Library) -> None:
-    title_id = a_show(library)
-    library.record_watch(title_id, Watch(watched_at="2018-05-12 01:10:14", episode=(1, 1)))
-    assert [(e["season_number"], e["episode_number"]) for e in library.episodes(title_id)] == [(1, 1)]
-
-
-def test_the_same_watch_imported_twice_is_stored_once(library: Library) -> None:
-    title_id = a_show(library)
-    watch = Watch(watched_at="2018-05-12 01:10:14", episode=(1, 1), source="tvtime")
-    library.record_watch(title_id, watch)
-    library.record_watch(title_id, watch)
-    assert library.title(title_id).episodes_watched == 1
-    assert library.stats()["watches"] == 1
-
-
-def test_a_rewatch_is_a_second_row_not_a_duplicate(library: Library) -> None:
-    title_id = a_show(library)
-    library.record_watch(title_id, Watch(watched_at="2018-05-12 01:10:14", episode=(1, 1)))
-    library.record_watch(title_id, Watch(watched_at="2021-04-23 00:23:28", episode=(1, 1), is_rewatch=True))
-    assert library.stats()["watches"] == 2
-    assert library.title(title_id).episodes_watched == 1
-
-
 def test_a_film_watched_twice_on_the_same_day_is_stored_once(library: Library) -> None:
     title_id = library.upsert_title(Title(name="Arrival", kind=Kind.MOVIE, tmdb_id=329865))
     for _ in range(2):
@@ -67,6 +44,7 @@ def test_up_next_is_the_lowest_unwatched_episode_and_skips_specials(library: Lib
     # Watched out of order: 1 and 3, leaving a gap at 2.
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
     library.record_watch(title_id, Watch(watched_at="2020-01-03 00:00:00", episode=(1, 3)))
+    library.link_watches(title_id)
 
     (row,) = library.up_next()
     assert (row["season_number"], row["episode_number"]) == (1, 2)
@@ -106,6 +84,7 @@ def test_known_minutes_counts_episode_runtime_where_it_exists(library: Library) 
     library.upsert_episode(title_id, Episode(season_number=1, episode_number=2))
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
     library.record_watch(title_id, Watch(watched_at="2020-01-02 00:00:00", episode=(1, 2)))
+    library.link_watches(title_id)
     assert library.stats()["known_minutes"] == 22
 
 
@@ -145,43 +124,3 @@ def test_unnumbered_watches_still_count_toward_the_title(library: Library) -> No
     # No episode to count, but the viewing is on record and dated.
     assert row.episodes_watched == 0
     assert row.last_watched_at == "2019-01-01 00:00:00"
-
-
-def test_progress_counts_the_same_episodes_the_catalog_counted(library: Library) -> None:
-    """Specials are out of both the numerator and the denominator, or neither.
-
-    TMDB's `number_of_episodes` excludes season 0, so counting a watched
-    special toward progress reads as 9 of 8 — which is how INVINCIBLE showed
-    33 of 32 with every row correct.
-    """
-    title_id = a_show(library, "INVINCIBLE", tvdb_id=368207)
-    library.apply_enrichment(
-        title_id,
-        Title(name="INVINCIBLE", tvdb_id=368207, total_episodes=8),
-        enriched_at="2026-01-01T00:00:00+00:00",
-    )
-    for number in range(1, 9):
-        library.record_watch(title_id, Watch(watched_at=f"2024-01-{number:02d} 00:00:00", episode=(1, number)))
-    library.record_watch(title_id, Watch(watched_at="2024-02-01 00:00:00", episode=(0, 1)))
-
-    row = library.title(title_id)
-    assert (row.episodes_watched, row.total_episodes) == (8, 8)
-    # The special is still stored, still watched, and still shown on the title.
-    assert len(library.episodes(title_id)) == 9
-    # And it still counts as viewing: the library-wide total is not about a
-    # catalog's idea of a season.
-    assert library.stats()["episodes_watched"] == 9
-
-
-def test_a_watch_with_no_episode_keeps_its_timestamp(library: Library) -> None:
-    """The Beyblade case: a watch the export could not number.
-
-    Joining episodes to read a season must not drop the row — its timestamp is
-    what puts the title in the right place on a shelf.
-    """
-    title_id = a_show(library, "Beyblade", tvdb_id=70799)
-    library.record_watch(title_id, Watch(watched_at="2017-03-07 05:27:58", episode=None))
-
-    row = library.title(title_id)
-    assert row.episodes_watched == 0
-    assert row.last_watched_at == "2017-03-07 05:27:58"

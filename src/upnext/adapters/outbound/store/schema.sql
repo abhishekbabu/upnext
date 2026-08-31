@@ -39,6 +39,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS titles_tvdb ON titles (kind, tvdb_id) WHERE tv
 CREATE UNIQUE INDEX IF NOT EXISTS titles_tmdb ON titles (kind, tmdb_id) WHERE tmdb_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS titles_name ON titles (name);
 
+-- The catalog's episode list, and nothing else. An import never writes here:
+-- it does not know what the episodes are, and a row invented from a watch is a
+-- claim about a show's structure made by a service that is not the source of
+-- truth for it. What the export said about an episode lives on the watch.
 CREATE TABLE IF NOT EXISTS episodes (
     id             INTEGER PRIMARY KEY,
     title_id       INTEGER NOT NULL REFERENCES titles (id) ON DELETE CASCADE,
@@ -57,15 +61,28 @@ CREATE TABLE IF NOT EXISTS episodes (
     UNIQUE (title_id, season_number, episode_number)
 );
 
+CREATE INDEX IF NOT EXISTS episodes_title ON episodes (title_id);
+
 -- One row per viewing, not per episode: rewatches are separate rows, which is
 -- what makes "watched Arrow twice" representable at all.
 CREATE TABLE IF NOT EXISTS watches (
     id          INTEGER PRIMARY KEY,
     title_id    INTEGER NOT NULL REFERENCES titles (id) ON DELETE CASCADE,
-    -- Null for a film, where the title is the thing watched.
-    episode_id  INTEGER REFERENCES episodes (id) ON DELETE CASCADE,
+    -- The catalog episode this viewing is of, once enrichment has matched one.
+    -- Null for a film, for a watch the export could not number, and for a watch
+    -- whose numbering the catalog does not share.
+    episode_id  INTEGER REFERENCES episodes (id) ON DELETE SET NULL,
     watched_at  TEXT    NOT NULL,
     is_rewatch  INTEGER NOT NULL DEFAULT 0,
+
+    -- What the exporting service called the episode watched, kept whatever the
+    -- catalog turns out to say. This is the half of the record the catalog can
+    -- never supply: TV Time files Sidemen Sundays under year-numbered seasons
+    -- and TMDB numbers it 1..N, so all 320 viewings match nothing — and without
+    -- these columns "S2018E28, watched on this date" would simply be gone.
+    -- Null where the export declined to number the episode at all.
+    source_season  INTEGER,
+    source_episode INTEGER,
     -- The exporting service's own id for the episode watched. TV Time issues
     -- one per viewing even for shows whose season/episode numbers it does not
     -- fill in, so this is what tells two such watches apart — and what makes
@@ -86,12 +103,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS watches_source_episode
     ON watches (title_id, source, source_episode_id, watched_at)
     WHERE source_episode_id IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS watches_episode_time
-    ON watches (title_id, episode_id, watched_at, source)
-    WHERE source_episode_id IS NULL AND episode_id IS NOT NULL;
+-- On the source's own numbering rather than episode_id, because episode_id is
+-- null until enrichment runs and a viewing has to be identifiable before then.
+CREATE UNIQUE INDEX IF NOT EXISTS watches_source_numbering
+    ON watches (title_id, source, source_season, source_episode, watched_at)
+    WHERE source_episode_id IS NULL AND source_episode IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS watches_title ON watches (title_id);
 CREATE INDEX IF NOT EXISTS watches_at ON watches (watched_at);
+CREATE INDEX IF NOT EXISTS watches_episode ON watches (episode_id);
 
 -- The user's relationship to a title, as opposed to the title's own facts.
 CREATE TABLE IF NOT EXISTS title_state (

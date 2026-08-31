@@ -9,11 +9,27 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Sequence
 
-from upnext.domain.models import Episode, Kind, Status, Title, TitleRow, TitleState, Watch
+from upnext.domain.models import (
+    Episode,
+    EpisodeRow,
+    Kind,
+    Status,
+    Title,
+    TitleRow,
+    TitleState,
+    UnmatchedWatch,
+    Watch,
+)
 
 # The columns of `titles` that enrichment is allowed to overwrite. `name` and
 # `year` are not among them by default: an import names a title from the user's
 # own history, and a bad TMDB match should not silently rewrite the library.
+# A season number at or above this is a calendar year, not an index. Television
+# has not run to a nineteen-hundredth season of anything, so there is nothing to
+# be ambiguous about.
+SEASON_IS_A_YEAR = 1900
+
+# The columns of `titles` that enrichment is allowed to overwrite. `name` and
 ENRICHABLE = (
     "tmdb_id",
     "imdb_id",
@@ -89,6 +105,12 @@ class Library:
         )
 
     def upsert_episode(self, title_id: int, episode: Episode) -> int:
+        """Insert or update one episode of the catalog's list, returning its id.
+
+        Only enrichment reaches here. An import has no idea what a show's
+        episodes are — it has a season and a number the exporting service used,
+        and that goes on the watch.
+        """
         self.conn.execute(
             """
             INSERT INTO episodes (title_id, season_number, episode_number, name, overview,
@@ -124,43 +146,45 @@ class Library:
         return int(row["id"])
 
     def record_watch(self, title_id: int, watch: Watch) -> None:
-        """Record one viewing, creating a placeholder episode if it is unknown.
+        """Record one viewing, in the source's own vocabulary.
 
-        The placeholder matters: an export names episodes by season and number
-        long before enrichment can give them titles, and dropping those watches
-        until TMDB has been consulted would make the import worthless offline.
+        No episode row is created and none is looked up. The export knows a
+        season and a number the exporting service used; whether the catalog
+        agrees is not knowable offline and is not this method's business.
+        `link_watches` joins the two once enrichment has an episode list.
         """
-        episode_id = None
-        if watch.episode is not None:
-            season, number = watch.episode
-            episode_id = self.upsert_episode(title_id, Episode(season_number=season, episode_number=number))
-
-        if self._already_recorded(title_id, episode_id, watch):
+        if self._already_recorded(title_id, watch):
             return
 
+        season, number = watch.episode if watch.episode is not None else (None, None)
         self.conn.execute(
             """
-            INSERT INTO watches (title_id, episode_id, watched_at, is_rewatch, source, source_episode_id)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO watches (title_id, watched_at, is_rewatch, source,
+                                 source_episode_id, source_season, source_episode)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 title_id,
-                episode_id,
                 watch.watched_at,
                 int(watch.is_rewatch),
                 watch.source,
                 watch.source_episode_id,
+                season,
+                number,
             ),
         )
 
-    def _already_recorded(self, title_id: int, episode_id: int | None, watch: Watch) -> bool:
+    def _already_recorded(self, title_id: int, watch: Watch) -> bool:
         """Whether this exact viewing is in the library already.
 
         Identity is the source's own episode id where there is one, and the
-        episode plus timestamp where there is not. The second form is why a
-        bulk "mark season watched" — one timestamp across fifty episodes — does
-        not collapse into a single row, and the first is why fifty watches the
-        source declined to number do not either.
+        source's numbering plus the timestamp where there is not. The second
+        form is why a bulk "mark season watched" — one timestamp across fifty
+        episodes — does not collapse into a single row, and the first is why
+        fifty watches the source declined to number do not either.
+
+        On the source's numbering rather than on a resolved episode, because a
+        re-import must converge whether or not enrichment has run since.
         """
         if watch.source_episode_id is not None:
             sql = """
@@ -169,13 +193,108 @@ class Library:
             """
             params: tuple = (title_id, watch.source, watch.source_episode_id, watch.watched_at)
         else:
+            season, number = watch.episode if watch.episode is not None else (None, None)
             sql = """
                 SELECT 1 FROM watches
                 WHERE title_id = ? AND source = ? AND watched_at = ?
-                  AND episode_id IS ? AND source_episode_id IS NULL
+                  AND source_season IS ? AND source_episode IS ? AND source_episode_id IS NULL
             """
-            params = (title_id, watch.source, watch.watched_at, episode_id)
+            params = (title_id, watch.source, watch.watched_at, season, number)
         return self.conn.execute(sql, params).fetchone() is not None
+
+    def link_watches(self, title_id: int) -> int:
+        """Match this title's watches to the catalog episodes they name.
+
+        Run after enrichment has written the episode list. Two passes, and the
+        difference between them is the whole design:
+
+        Episode numbers are matched exactly and never approximately. Deciding
+        that a viewing of S06E25 was "probably" S06E24 would put a guess into
+        the one table that is supposed to be the truth, and Friends' eight
+        split finales are exactly that case.
+
+        Season *labels* are a different question, because a label is not a
+        claim about content. TheTVDB labels some shows' seasons by calendar
+        year where TMDB numbers them 1..N — Sidemen Sundays is 2019 at one and
+        season 4 at the other, with identical episode numbering inside. That is
+        resolvable from the catalog's own air dates rather than guessed at, so
+        the second pass does it: a source season that is plainly a year, not an
+        index, is aliased to the catalog season that aired in it.
+
+        Returns how many watches found an episode.
+        """
+        return self._link_by_season_number(title_id) + self._link_by_season_year(title_id)
+
+    def _link_by_season_number(self, title_id: int) -> int:
+        """The ordinary case: both sides number the season the same way."""
+        cursor = self.conn.execute(
+            """
+            UPDATE watches
+               SET episode_id = (
+                   SELECT e.id FROM episodes e
+                    WHERE e.title_id = watches.title_id
+                      AND e.season_number = watches.source_season
+                      AND e.episode_number = watches.source_episode
+               )
+             WHERE title_id = :title_id
+               AND episode_id IS NULL
+               AND source_season IS NOT NULL
+               AND EXISTS (
+                   SELECT 1 FROM episodes e
+                    WHERE e.title_id = watches.title_id
+                      AND e.season_number = watches.source_season
+                      AND e.episode_number = watches.source_episode
+               )
+            """,
+            {"title_id": title_id},
+        )
+        return cursor.rowcount
+
+    def _link_by_season_year(self, title_id: int) -> int:
+        """The aliased case: the source labelled the season with its year.
+
+        A season number at or above `SEASON_IS_A_YEAR` cannot be an index —
+        no show has a nineteen-hundredth season — so reading it as a year is
+        not a guess. The catalog season it refers to is the one that actually
+        aired that year, taken by weight of episodes so that a season
+        straddling New Year resolves to the year most of it belongs to.
+        """
+        cursor = self.conn.execute(
+            """
+            UPDATE watches
+               SET episode_id = (
+                   SELECT e.id FROM episodes e
+                    WHERE e.title_id = watches.title_id
+                      AND e.episode_number = watches.source_episode
+                      AND e.season_number = (
+                          SELECT e2.season_number FROM episodes e2
+                           WHERE e2.title_id = watches.title_id
+                             AND substr(e2.air_date, 1, 4) = CAST(watches.source_season AS TEXT)
+                           GROUP BY e2.season_number
+                           ORDER BY COUNT(*) DESC, e2.season_number
+                           LIMIT 1
+                      )
+               )
+             WHERE title_id = :title_id
+               AND episode_id IS NULL
+               AND source_season >= :year_floor
+               AND EXISTS (
+                   SELECT 1 FROM episodes e
+                    WHERE e.title_id = watches.title_id
+                      AND e.episode_number = watches.source_episode
+                      AND e.season_number = (
+                          SELECT e2.season_number FROM episodes e2
+                           WHERE e2.title_id = watches.title_id
+                             AND substr(e2.air_date, 1, 4) = CAST(watches.source_season AS TEXT)
+                           GROUP BY e2.season_number
+                           ORDER BY COUNT(*) DESC, e2.season_number
+                           LIMIT 1
+                      )
+               )
+            """,
+            {"title_id": title_id, "year_floor": SEASON_IS_A_YEAR},
+        )
+        return cursor.rowcount
 
     def set_state(self, title_id: int, state: TitleState) -> None:
         self.conn.execute(
@@ -216,6 +335,8 @@ class Library:
             f"""
             SELECT t.*, s.status, s.is_favorite, s.rating, s.reported_watched,
                    COUNT(DISTINCT CASE WHEN e.season_number > 0 THEN w.episode_id END) AS episodes_watched,
+                   COUNT(DISTINCT CASE WHEN w.episode_id IS NULL AND w.source_season > 0
+                                       THEN w.source_season || 'x' || w.source_episode END) AS unmatched_watched,
                    MAX(w.watched_at) AS last_watched_at
             FROM titles t
             LEFT JOIN title_state s ON s.title_id = t.id
@@ -236,6 +357,8 @@ class Library:
             """
             SELECT t.*, s.status, s.is_favorite, s.rating, s.reported_watched,
                    COUNT(DISTINCT CASE WHEN e.season_number > 0 THEN w.episode_id END) AS episodes_watched,
+                   COUNT(DISTINCT CASE WHEN w.episode_id IS NULL AND w.source_season > 0
+                                       THEN w.source_season || 'x' || w.source_episode END) AS unmatched_watched,
                    MAX(w.watched_at) AS last_watched_at
             FROM titles t
             LEFT JOIN title_state s ON s.title_id = t.id
@@ -250,8 +373,9 @@ class Library:
         ).fetchone()
         return _title_row(row) if row else None
 
-    def episodes(self, title_id: int) -> list[sqlite3.Row]:
-        return self.conn.execute(
+    def episodes(self, title_id: int) -> list[EpisodeRow]:
+        """Every episode of a title, in order, with how often it was watched."""
+        rows = self.conn.execute(
             """
             SELECT e.*, COUNT(w.id) AS watch_count, MAX(w.watched_at) AS last_watched_at
             FROM episodes e
@@ -262,6 +386,35 @@ class Library:
             """,
             (title_id,),
         ).fetchall()
+        return [_episode_row(row) for row in rows]
+
+    def unmatched_watches(self, title_id: int) -> list[UnmatchedWatch]:
+        """Viewings this title's catalog episode list does not account for.
+
+        Grouped by what the source called the episode, so a rewatch is one row
+        with a count rather than two rows. Ordered by the source's numbering,
+        which is the order they were watched in for anyone who watched in order.
+        """
+        rows = self.conn.execute(
+            """
+            SELECT source_season, source_episode,
+                   COUNT(*) AS watch_count, MAX(watched_at) AS last_watched_at
+            FROM watches
+            WHERE title_id = ? AND episode_id IS NULL AND source_season IS NOT NULL
+            GROUP BY source_season, source_episode
+            ORDER BY source_season, source_episode
+            """,
+            (title_id,),
+        ).fetchall()
+        return [
+            UnmatchedWatch(
+                season_number=row["source_season"],
+                episode_number=row["source_episode"],
+                watch_count=row["watch_count"],
+                last_watched_at=row["last_watched_at"],
+            )
+            for row in rows
+        ]
 
     def up_next(self, limit: int = 20) -> list[dict]:
         """The next unwatched episode of every show currently being watched.
@@ -300,7 +453,16 @@ class Library:
         totals = self.conn.execute(
             """
             SELECT COUNT(*) AS watches,
-                   COUNT(DISTINCT episode_id) AS episodes,
+                   -- An episode is one episode whether the catalog lists it or
+                   -- not: a matched one counts by its id, an unmatched one by
+                   -- what the source called it. A watch the export declined to
+                   -- number counts as neither, which is why Beyblade's viewing
+                   -- total is honest and its episode total is short.
+                   COUNT(DISTINCT CASE
+                       WHEN episode_id IS NOT NULL THEN 'e' || episode_id
+                       WHEN source_season IS NOT NULL
+                           THEN 'u' || title_id || 'x' || source_season || 'x' || source_episode
+                   END) AS episodes,
                    COUNT(DISTINCT title_id) AS titles,
                    MIN(watched_at) AS first_watch,
                    MAX(watched_at) AS last_watch
@@ -338,7 +500,7 @@ class Library:
         rows = self.conn.execute(
             f"""
             SELECT t.*, s.status, s.is_favorite, s.rating, s.reported_watched,
-                   0 AS episodes_watched, NULL AS last_watched_at
+                   0 AS episodes_watched, 0 AS unmatched_watched, NULL AS last_watched_at
             FROM titles t
             LEFT JOIN title_state s ON s.title_id = t.id
             WHERE t.enriched_at IS NULL
@@ -409,5 +571,22 @@ def _title_row(row: sqlite3.Row) -> TitleRow:
         rating=row["rating"],
         reported_watched=row["reported_watched"],
         episodes_watched=row["episodes_watched"] or 0,
+        unmatched_watched=row["unmatched_watched"] or 0,
+        enriched_at=row["enriched_at"],
+        last_watched_at=row["last_watched_at"],
+    )
+
+
+def _episode_row(row: sqlite3.Row) -> EpisodeRow:
+    return EpisodeRow(
+        id=row["id"],
+        season_number=row["season_number"],
+        episode_number=row["episode_number"],
+        name=row["name"],
+        overview=row["overview"],
+        air_date=row["air_date"],
+        runtime=row["runtime"],
+        still_path=row["still_path"],
+        watch_count=row["watch_count"] or 0,
         last_watched_at=row["last_watched_at"],
     )

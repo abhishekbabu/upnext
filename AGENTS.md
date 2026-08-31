@@ -64,6 +64,26 @@ nothing else. `name` and `year` are deliberately excluded — an import names a
 title from the user's own history, and a bad catalog match must not silently
 rewrite the library.
 
+**`episodes` is the catalog's list and nothing else.** An import never writes to
+it. A viewing records the season and episode number the *source* used, on the
+watch, and `link_watches` matches the two once there is a list to match against.
+A row invented from a watch is a claim about a show's structure made by
+something that is not the source of truth for it — that shape is what made a
+complete Friends read 236 of 228.
+
+**Matching is exact on episode number, never approximate.** A near miss written
+into `episodes` is a guess in the one table that must not contain any. Season
+*labels* are the exception and only via catalog evidence: a season number at or
+above `SEASON_IS_A_YEAR` is a year, not an index, and resolves to whichever
+catalog season aired then. Arithmetic alone — inferring an offset because two
+episode counts happen to sum — is not evidence.
+
+**Progress and history are different counts.** `episodes_watched` is what the
+catalog's list contains and pairs with `total_episodes`; `unmatched_watched` is
+what it does not. Never add them into one figure, and never show either without
+`enriched_at` beside it: before enrichment everything is unmatched because
+nothing has been asked, which is the opposite statement to a disagreement.
+
 **Matching is strict.** A TheTVDB id is an identity; a name search is a guess.
 Search is the fallback only, first result only, and only when the year agrees.
 A title the catalog has never heard of stays exactly as the export described it —

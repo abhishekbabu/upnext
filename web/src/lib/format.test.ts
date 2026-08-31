@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { episodeCode, hours, poster, progress, shortDate, titleWithYear } from "@/lib/format";
+import { episodeCode, hours, poster, progressOf, shortDate, titleWithYear } from "@/lib/format";
 
 const BASE = "https://image.tmdb.org/t/p";
 
@@ -26,20 +26,55 @@ describe("episodeCode", () => {
   });
 });
 
-describe("progress", () => {
-  it("is the watched share of the catalog's episode count", () => {
-    expect(progress({ episodes_watched: 118, total_episodes: 236 })).toBe(0.5);
+describe("progressOf", () => {
+  const title = (watched: number, unmatched: number, total: number | null) => ({
+    episodes_watched: watched,
+    unmatched_watched: unmatched,
+    total_episodes: total,
   });
 
-  it("is null without a catalog count, rather than a full bar", () => {
-    // An unenriched title has watches but no denominator. Treating the watched
-    // count as the total would claim every unenriched show is finished.
-    expect(progress({ episodes_watched: 12, total_episodes: null })).toBeNull();
-    expect(progress({ episodes_watched: 12, total_episodes: 0 })).toBeNull();
+  it("measures the watched share of TMDB's list", () => {
+    expect(progressOf(title(114, 0, 228))).toEqual({
+      kind: "measured",
+      watched: 114,
+      total: 228,
+      share: 0.5,
+      unmatched: 0,
+    });
   });
 
-  it("clamps rather than overflowing when TMDB revises a count downward", () => {
-    expect(progress({ episodes_watched: 240, total_episodes: 228 })).toBe(1);
+  it("keeps the unmatched count beside a measured share", () => {
+    // Friends: a complete watch of TMDB's 228, plus the eight season finales
+    // TheTVDB splits in two and TMDB counts once.
+    expect(progressOf(title(228, 8, 228))).toEqual({
+      kind: "measured",
+      watched: 228,
+      total: 228,
+      share: 1,
+      unmatched: 8,
+    });
+  });
+
+  it("counts, rather than measures, a title with no catalog list yet", () => {
+    // Unenriched: everything is unmatched only because there is nothing to
+    // match against. Reporting that as a disagreement would be a lie.
+    expect(progressOf(title(0, 12, null))).toEqual({ kind: "counted", watched: 12 });
+  });
+
+  it("draws no bar when TMDB has a list and nothing is on it", () => {
+    // Sidemen Sundays: numbered by year in the export, 1..N at TMDB. A 0% bar
+    // beside 320 watched episodes is true and reads as "not started".
+    expect(progressOf(title(0, 320, 461))).toEqual({ kind: "unmatched", unmatched: 320, total: 461 });
+  });
+
+  it("has nothing to say about a title nobody has watched", () => {
+    expect(progressOf(title(0, 0, null))).toEqual({ kind: "none" });
+    expect(progressOf(title(0, 0, 0))).toEqual({ kind: "none" });
+  });
+
+  it("clamps when TMDB revises a count below what was matched against it", () => {
+    const result = progressOf(title(240, 0, 228));
+    expect(result.kind === "measured" && result.share).toBe(1);
   });
 });
 

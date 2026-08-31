@@ -84,7 +84,18 @@ class WatchLibrary(Protocol):
 
     def record_watch(self, title_id: int, watch: Watch) -> None: ...
 
-    def upsert_episode(self, title_id: int, episode: Episode) -> int: ...
+    def upsert_episode(self, title_id: int, episode: Episode) -> int:
+        """Store one episode of the catalog's list."""
+        ...
+
+    def link_watches(self, title_id: int) -> int:
+        """Match this title's recorded viewings to the episodes just stored.
+
+        Returns how many found one. The rest are viewings of something the
+        catalog's list does not contain, and keep the numbering the source gave
+        them.
+        """
+        ...
 
     def apply_enrichment(self, title_id: int, title: Title, *, enriched_at: str) -> None: ...
 

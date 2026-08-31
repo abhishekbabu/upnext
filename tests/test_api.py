@@ -26,6 +26,9 @@ def api(tmp_path: Path) -> TestClient:
 
     arrow = library.upsert_title(Title(name="Arrow", tvdb_id=257655))
     library.set_state(arrow, TitleState(status=Status.COMPLETED))
+    # What enrichment does after writing the episode list: a watch records what
+    # the source called the episode, and is matched to a catalog one here.
+    library.link_watches(friends)
     library.conn.commit()
     library.conn.close()
 

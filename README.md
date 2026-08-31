@@ -73,7 +73,8 @@ export is not safe to commit**: it contains live OAuth tokens. `.gitignore`
 covers the usual folder names and `detect-private-key` runs pre-commit, but the
 export belongs outside the repo.
 
-**Enrich** is where TMDB comes in. TV Time's show ids are TheTVDB ids, and
+**Enrich** is where TMDB comes in. It writes the episode list and matches the
+imported history onto it. TV Time's show ids are TheTVDB ids, and
 TMDB's `/find` endpoint maps one straight to a TMDB id — so enrichment is an
 identity lookup, not a name search, for nearly everything. Name search is the
 fallback, and it is strict: the first result only, and only when the year
@@ -99,16 +100,48 @@ A show with a seen count but no per-episode rows counts as history, not a
 wishlist: TV Time keeps the tally after it drops the detail, and those shows
 were watched.
 
-### Two things the export gets wrong, and what upnext does about them
+### TMDB is the source of truth; the export is the source of history
+
+The two answer different questions. TMDB says what a show *is* — its seasons,
+its episodes, their names and air dates. The export says what was *watched*,
+and it says it in whatever vocabulary the exporting service used.
+
+So `episodes` holds TMDB's list and nothing else. An import never writes to it:
+it records a viewing with the season and episode number the service gave, and
+enrichment matches those to real episodes afterwards. Where they line up — the
+overwhelming majority — a watch points at a catalog episode and progress is
+simply a fraction. Where they do not, the viewing keeps the numbering it came
+with and is shown apart, under **Not in TMDB** on the title page.
+
+Matching is exact on episode number and never approximate: deciding a viewing
+of S06E25 was "probably" S06E24 would put a guess into the one table that is
+supposed to be the truth. Season *labels* are a different matter, because a
+label is not a claim about content — TheTVDB numbers some shows' seasons by
+calendar year where TMDB numbers them 1..N, so a season plainly labelled `2019`
+is resolved to whichever catalog season aired in 2019, using TMDB's own air
+dates rather than a guess.
+
+What is left over after that is a real disagreement, and worth seeing:
+
+| Show | Reads as | Because |
+| --- | --- | --- |
+| Friends | 228 / 228, plus 8 | TheTVDB splits the eight double-length finales TMDB counts once |
+| The Haunting | 10 / 10, plus 9 | TV Time files Bly Manor as a second season; TMDB ends the title at one |
+| Whose Line (US) | 219 / 219, plus 76 | the 2013 revival is a separate title at TMDB |
+
+### Three other things the export gets wrong
 
 - **Unnumbered episodes.** TV Time exports some shows with `episode_number` 0 —
   the whole of Beyblade, in the export this was built against. Those watches are
-  kept against the show with no episode attached, rather than folded into one
-  fictional slot. The viewing count stays honest; the episode list is short.
+  kept against the show with no episode attached. The viewing count stays
+  honest; the episode list is short.
 - **Bulk marks.** Marking a season watched stamps every episode with the same
   second, and TV Time can issue two episodes with identical season/episode
   numbers. A watch is therefore identified by the source's own episode id where
-  there is one, and by episode-plus-timestamp where there is not.
+  there is one, and by its numbering plus the timestamp where there is not.
+- **Specials.** Season 0 is specials at every source, and TMDB leaves them out
+  of `number_of_episodes`. They are stored, listed and counted as watched, but
+  they are not progress — otherwise a watched special reads as 33 of 32.
 
 ## The app
 
@@ -149,7 +182,7 @@ on the entry bundle, because everything in it is time the page is blank.
 | Route | What it returns |
 | --- | --- |
 | `GET /api/titles?status=&kind=` | the library, with counted progress per title |
-| `GET /api/titles/{id}` | one title and its episodes, each with a watch count |
+| `GET /api/titles/{id}` | one title, its episodes with watch counts, and any viewings TMDB cannot account for |
 | `GET /api/up-next` | the next unwatched episode of everything in progress |
 | `GET /api/stats` | episodes, titles, date range, runtime, counts by status |
 
