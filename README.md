@@ -24,12 +24,25 @@ anywhere to see this but `curl`. See [Roadmap](#roadmap).
 
 ```sh
 just install                       # venv, locked dependencies, git hooks
-cp .env.template .env              # then add a TMDB key (free, no card)
+cp .env.template .env              # then add a TMDB key, see below
 just import ~/Documents/tv-time-data
 just enrich
 just stats
 just serve                         # http://localhost:8000/docs
 ```
+
+### The TMDB key
+
+Sign up at [themoviedb.org](https://www.themoviedb.org/signup), then request a
+key under [Settings → API](https://www.themoviedb.org/settings/api). Choose
+**Developer**: it is free, needs no card, and personal use is within its terms.
+Copy the value labelled **API Key** — the v3 one, a 32-character hex string, not
+the much longer read access token.
+
+It goes in `.env` as `UPNEXT_TMDB_API_KEY`, which is gitignored and never
+leaves the machine. `upnext import` and the API do not need it; `upnext enrich`
+is the one command that does, and it says so up front rather than failing
+partway through.
 
 The library is a single SQLite file at `~/.upnext/library.db`. Delete it and
 re-import; nothing else holds state.

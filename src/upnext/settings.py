@@ -7,6 +7,11 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# The repo root, two levels up from src/upnext/settings.py. The .env is found
+# by absolute path rather than by name so that `upnext` picks it up wherever it
+# is run from, not only from the project directory.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 DEFAULT_DB_PATH = Path.home() / ".upnext" / "library.db"
 
 
@@ -17,7 +22,12 @@ class Settings(BaseSettings):
     enrichment is the one command that fails loudly when it is missing.
     """
 
-    model_config = SettingsConfigDict(env_prefix="UPNEXT_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="UPNEXT_",
+        env_file=PROJECT_ROOT / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     db_path: Path = Field(default=DEFAULT_DB_PATH)
     tmdb_api_key: str = Field(default="")
