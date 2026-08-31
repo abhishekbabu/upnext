@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "upnext"
 version = "0.1.0"
-description = "A personal TV and film watch tracker — a self-hosted replacement for TV Time"
+description = "Track what you watch. Know what's next."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
