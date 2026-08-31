@@ -152,15 +152,6 @@ describe("Library", () => {
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
-  it("says nothing about unmatched episodes on a title nobody has enriched", async () => {
-    // Everything is unmatched there, because nothing has been matched against.
-    stubFetch({ "/api/config": CONFIG, "/api/titles": [UNENRICHED] });
-    draw(<Library />);
-
-    await screen.findByText("3 watched");
-    expect(screen.queryByText(/not in TMDB/)).toBeNull();
-  });
-
   it("shows a full bar and the episodes TMDB does not list, together", async () => {
     // Friends: 228 of TMDB's 228, plus the eight finales TheTVDB splits in two.
     stubFetch({ "/api/config": CONFIG, "/api/titles": [{ ...FRIENDS, unmatched_watched: 8 }] });
@@ -168,7 +159,9 @@ describe("Library", () => {
 
     expect(await screen.findByText("228 / 228")).toBeTruthy();
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("100");
-    expect(screen.getByText("+8 not in TMDB")).toBeTruthy();
+    // The card is a glance — how far through, nothing else. Where the export
+    // and TMDB disagree is a footnote, and belongs on the title page.
+    expect(screen.queryByText(/not in TMDB/i)).toBeNull();
   });
 
   it("draws no bar for a show whose numbering TMDB does not share", async () => {
@@ -181,7 +174,6 @@ describe("Library", () => {
     draw(<Library />);
 
     expect(await screen.findByText("320 watched")).toBeTruthy();
-    expect(screen.getByText("+320 not in TMDB")).toBeTruthy();
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
@@ -263,7 +255,7 @@ describe("Title", () => {
   it("accounts for the viewings TMDB's list does not contain", async () => {
     drawTitle(DETAIL);
 
-    expect(await screen.findByText("Not in TMDB")).toBeTruthy();
+    expect(await screen.findByText("Also watched")).toBeTruthy();
     // Named concretely, so the claim is checkable rather than just a number.
     expect(screen.getByText(/S06E25/)).toBeTruthy();
   });
@@ -287,7 +279,7 @@ describe("Title", () => {
     drawTitle({ ...DETAIL, unmatched_watched: 0, unmatched: [] });
 
     await screen.findByText("The One Where It Begins");
-    expect(screen.queryByText("Not in TMDB")).toBeNull();
+    expect(screen.queryByText("Also watched")).toBeNull();
   });
 });
 

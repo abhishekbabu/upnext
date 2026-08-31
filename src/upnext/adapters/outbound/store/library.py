@@ -598,6 +598,34 @@ class Library:
             "by_status": {row["status"]: row["n"] for row in by_status},
         }
 
+    def title_by_tmdb_id(self, tmdb_id: int) -> TitleRow | None:
+        row = self.conn.execute(
+            "SELECT id FROM titles WHERE kind = ? AND tmdb_id = ?", (str(Kind.SHOW), tmdb_id)
+        ).fetchone()
+        return self.title(int(row["id"])) if row else None
+
+    def move_watches(self, *, source_id: int, target_id: int, season: int, as_season: int) -> int:
+        """Reassign one source season's viewings to a different title.
+
+        For where the export and the catalog disagree about what counts as one
+        show: TV Time files The Haunting of Bly Manor as season 2 of The
+        Haunting, and TMDB keeps it as its own title. The viewings are right;
+        the show they were filed under is not.
+
+        `episode_id` is cleared because the target's episode list is a
+        different list — whatever these matched before means nothing here, and
+        `link_watches` decides again from scratch.
+        """
+        cursor = self.conn.execute(
+            """
+            UPDATE watches
+               SET title_id = :target_id, source_season = :as_season, episode_id = NULL
+             WHERE title_id = :source_id AND source_season = :season
+            """,
+            {"target_id": target_id, "source_id": source_id, "season": season, "as_season": as_season},
+        )
+        return cursor.rowcount
+
     def count_titles(self) -> int:
         """How many titles the library holds at all, enriched or not."""
         return int(self.conn.execute("SELECT COUNT(*) AS n FROM titles").fetchone()["n"])

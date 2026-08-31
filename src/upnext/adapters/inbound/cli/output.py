@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from upnext.application.enrichment import EnrichmentResult
+from upnext.application.enrichment import EnrichmentResult, MoveResult
 from upnext.application.importing import ImportSummary
 from upnext.domain.models import TitleRow
 
@@ -53,6 +53,13 @@ def enrichment_done(result: EnrichmentResult) -> None:
         print("Not found on TMDB (left as imported):")
         for name in result.unmatched:
             print(f"  - {name}")
+
+
+def moved(source_name: str, season: int, result: MoveResult) -> None:
+    print(f"Moved {result.moved} watches from {source_name} season {season} to {result.target}.")
+    print(f"  {result.linked} matched an episode there.")
+    if result.linked < result.moved:
+        print(f"  {result.moved - result.linked} did not — see the title page.")
 
 
 def relinked(linked: int, unmatched: list[TitleRow]) -> None:

@@ -153,19 +153,26 @@ export function Title() {
  * episodes of this show as TMDB understands it, and interleaving them would put
  * the export's numbering back inside the catalog's — which is the shape this
  * whole design exists to undo. They are still viewings, and they still happened.
+ *
+ * Deliberately not styled as a warning. Two catalogues numbering a show
+ * differently is a fact about the data, not a fault: there is nothing here for
+ * a reader to fix, and nothing has gone wrong. It is a footnote to the count
+ * above, and reads as one. It is also the only place these viewings appear at
+ * all, which is why it is on the page rather than left to the CLI.
  */
 function Unmatched({ viewings }: { viewings: UnmatchedViewing[] }) {
   const total = viewings.reduce((sum, viewing) => sum + viewing.watch_count, 0);
 
   return (
-    <section className="mt-10 rounded-md border border-warn/40 bg-warn/5 p-4">
-      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-warn">Not in TMDB</h2>
+    <section className="mt-10 rounded-md border border-border bg-card p-4">
+      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        Also watched
+      </h2>
       <p className="mt-1.5 max-w-[70ch] text-[13px] leading-relaxed text-muted-foreground">
-        {viewings.length} {viewings.length === 1 ? "episode" : "episodes"} you watched
-        {total > viewings.length && ` (${total} viewings)`} that TMDB&rsquo;s list does not contain. Your history and
-        TMDB divide this show differently — a service that splits a double-length episode in two, or files a sequel
-        series as another season, leaves entries here. They are counted as watched everywhere except the progress
-        figure, which can only measure against TMDB&rsquo;s list.
+        {viewings.length} {viewings.length === 1 ? "episode" : "episodes"}
+        {total > viewings.length && ` (${total} viewings)`} outside TMDB&rsquo;s episode list, which numbers this show
+        differently from where the history came from. They count as watched everywhere except the figure above, which
+        can only measure against the list.
       </p>
       {viewings.length <= INLINE_LIMIT ? (
         <Chips viewings={viewings} />

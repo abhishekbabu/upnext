@@ -20,7 +20,9 @@ from pathlib import Path
 
 from upnext.adapters.outbound.store.db import connect, migrate
 from upnext.adapters.outbound.store.library import Library
+from upnext.application.enrichment import move_season
 from upnext.domain.models import Episode, Status, Title, TitleState, Watch
+from upnext.domain.ports import CatalogShow
 
 ENRICHED = "2026-08-31T00:00:00+00:00"
 
@@ -484,3 +486,85 @@ def test_nothing_is_mapped_when_no_watch_matched_by_number_first(library: Librar
     title_id = flat_show(library, catalog=2, watched=[(7, 1), (8, 1)])
 
     assert library.title(title_id).unmatched_watched == 2
+
+
+# ── a season that belongs to a different title entirely ─────────────────
+
+
+class OneShowCatalog:
+    """A catalog holding a single show, for moving a season into."""
+
+    def __init__(self, name: str, episodes: list[tuple[int, int]], *, tmdb_id: int = 109958) -> None:
+        self.show = CatalogShow(
+            title=Title(name=name, tmdb_id=tmdb_id, total_episodes=len(episodes)),
+            episodes=[Episode(season_number=s, episode_number=n) for s, n in episodes],
+        )
+
+    def find_by_tvdb(self, tvdb_id: int):
+        return None
+
+    def search_shows(self, name: str, *, year: int | None = None):
+        return []
+
+    def fetch_show(self, catalog_id: int) -> CatalogShow:
+        return self.show
+
+
+def test_a_season_moves_to_the_title_the_catalog_keeps_it_under(library: Library) -> None:
+    """TV Time files Bly Manor as season 2 of The Haunting; TMDB does not."""
+    title_id = a_show(library, "The Haunting")
+    library.record_watch(title_id, Watch(watched_at="2018-10-12 00:00:00", episode=(1, 1)))
+    for number in (1, 2):
+        library.record_watch(title_id, Watch(watched_at=f"2020-10-0{number} 00:00:00", episode=(2, number)))
+    enrich(library, title_id, total=1, episodes=[(1, 1)])
+
+    catalog = OneShowCatalog("The Haunting of Bly Manor", [(1, 1), (1, 2)])
+    result = move_season(catalog, library, source=library.title(title_id), tmdb_id=109958, season=2, as_season=1)
+
+    assert (result.target, result.moved, result.linked) == ("The Haunting of Bly Manor", 2, 2)
+    # The source keeps what was actually its own, and nothing is left over.
+    source = library.title(title_id)
+    assert (source.episodes_watched, source.unmatched_watched) == (1, 0)
+    target = library.title_by_tmdb_id(109958)
+    assert (target.episodes_watched, target.unmatched_watched, target.total_episodes) == (2, 0, 2)
+    # Every viewing survives the move.
+    assert library.stats()["watches"] == 3
+
+
+def test_a_moved_season_is_renumbered_into_the_target(library: Library) -> None:
+    """Whose Line's revival is seasons 9-12 at the export and 1-4 at TMDB."""
+    title_id = a_show(library, "Whose Line Is It Anyway? (US)")
+    library.record_watch(title_id, Watch(watched_at="2013-07-16 00:00:00", episode=(9, 1)))
+    enrich(library, title_id, total=1, episodes=[(1, 1)])
+
+    catalog = OneShowCatalog("Whose Line Is It Anyway?", [(1, 1)], tmdb_id=64978)
+    move_season(catalog, library, source=library.title(title_id), tmdb_id=64978, season=9, as_season=1)
+
+    target = library.title_by_tmdb_id(64978)
+    assert [(e.season_number, e.episode_number, e.watch_count) for e in library.episodes(target.id)] == [(1, 1, 1)]
+
+
+def test_the_moved_title_inherits_the_state_it_was_filed_under(library: Library) -> None:
+    """The only guess worth making about a title nobody has expressed a view on."""
+    title_id = a_show(library, "The Haunting")
+    library.set_state(title_id, TitleState(status=Status.COMPLETED))
+    library.record_watch(title_id, Watch(watched_at="2020-10-01 00:00:00", episode=(2, 1)))
+
+    catalog = OneShowCatalog("The Haunting of Bly Manor", [(1, 1)])
+    move_season(catalog, library, source=library.title(title_id), tmdb_id=109958, season=2, as_season=1)
+
+    assert library.title_by_tmdb_id(109958).status is Status.COMPLETED
+
+
+def test_moving_into_a_title_the_library_already_has_does_not_duplicate_it(library: Library) -> None:
+    existing = library.upsert_title(Title(name="The Haunting of Bly Manor", tmdb_id=109958))
+    library.set_state(existing, TitleState(status=Status.WATCHING))
+
+    title_id = a_show(library, "The Haunting")
+    library.record_watch(title_id, Watch(watched_at="2020-10-01 00:00:00", episode=(2, 1)))
+
+    catalog = OneShowCatalog("The Haunting of Bly Manor", [(1, 1)])
+    move_season(catalog, library, source=library.title(title_id), tmdb_id=109958, season=2, as_season=1)
+
+    assert library.count_titles() == 2
+    assert library.title(existing).episodes_watched == 1

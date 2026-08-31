@@ -136,15 +136,27 @@ evidence, though, and both are:
 lists. It needs no network and no key; enrichment does it per title as it goes,
 but only for titles it enriches.
 
+Sometimes the disagreement is not about episodes but about what counts as one
+show. TV Time files The Haunting of Bly Manor as season 2 of The Haunting, and
+Whose Line's 2013 revival as seasons 9 to 12 of the 1998 one; TMDB keeps each
+as its own title. `upnext move` puts those viewings where they belong:
+
+```sh
+upnext move --title 73 --season 2 --to 109958 --as-season 1
+```
+
+It is a person's call rather than an automatic one, and deliberately so: TMDB
+has no "this is season 2 of that" relation, so anything automatic would be a
+name search and a hope.
+
 What is left over after that is a real disagreement, and worth seeing:
 
 | Show | Reads as | Because |
 | --- | --- | --- |
 | Friends | 228 / 228, plus 8 | TheTVDB splits the eight double-length finales TMDB counts once |
-| The Haunting | 10 / 10, plus 9 | TV Time files Bly Manor as a second season; TMDB ends the title at one |
-| Whose Line (US) | 219 / 219, plus 76 | the 2013 revival is a separate title at TMDB |
-| Yu-Gi-Oh! 5D's | 26 / 154, plus 52 | a partly watched run, so its season lengths cannot be known |
+| Yu-Gi-Oh! 5D's | 26 / 154, plus 52 | a partly watched run the catalog keeps flat, so its season lengths cannot be known |
 | Jimmy Kimmel Live! | 0 / 3334, plus 5 | a nightly show the two number by different schemes entirely |
+| Power Rangers | 210 / 973, plus 1 | one episode past where TMDB ends the season |
 
 ### Three other things the export gets wrong
 

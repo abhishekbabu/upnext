@@ -14,7 +14,7 @@ from upnext import bootstrap
 from upnext.adapters.inbound.cli import output
 from upnext.adapters.outbound.store.db import open_library
 from upnext.adapters.outbound.store.library import Library
-from upnext.application.enrichment import enrich, relink
+from upnext.application.enrichment import enrich, move_season, relink
 from upnext.application.importing import import_export
 from upnext.config.settings import load_settings
 from upnext.domain.errors import UpnextError
@@ -62,6 +62,32 @@ def cmd_enrich(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_move(args: argparse.Namespace) -> int:
+    settings = load_settings()
+    with open_library(args.db or settings.db_path) as conn:
+        library = Library(conn)
+        source = library.title(args.title)
+        if source is None:
+            output.error(f"No title with id {args.title}. `upnext stats` or the API will list them.")
+            return EXIT_FAILED
+        try:
+            catalog = bootstrap.build_catalog(settings)
+            result = move_season(
+                catalog,
+                library,
+                source=source,
+                tmdb_id=args.to,
+                season=args.season,
+                as_season=args.as_season if args.as_season is not None else args.season,
+            )
+        except UpnextError as exc:
+            output.error(str(exc))
+            return EXIT_FAILED
+
+    output.moved(source.name, args.season, result)
+    return EXIT_OK
+
+
 def cmd_relink(args: argparse.Namespace) -> int:
     settings = load_settings()
     with open_library(args.db or settings.db_path) as conn:
@@ -106,6 +132,26 @@ def build_parser() -> argparse.ArgumentParser:
     p_enrich = sub.add_parser("enrich", help="Resolve imported titles against TMDB")
     p_enrich.add_argument("--limit", type=int, default=None, help="Only enrich the first N titles")
     p_enrich.set_defaults(func=cmd_enrich)
+
+    p_move = sub.add_parser(
+        "move",
+        help="Move a season's watches to the TMDB title they actually belong to",
+        description=(
+            "For where the export and TMDB disagree about what counts as one show — "
+            "TV Time files The Haunting of Bly Manor as season 2 of The Haunting, and "
+            "TMDB keeps it as its own title."
+        ),
+    )
+    p_move.add_argument("--title", type=int, required=True, help="The library id of the title to move a season out of")
+    p_move.add_argument("--season", type=int, required=True, help="The season, as the export numbered it")
+    p_move.add_argument("--to", type=int, required=True, metavar="TMDB_ID", help="The TMDB id to move it to")
+    p_move.add_argument(
+        "--as-season",
+        type=int,
+        default=None,
+        help="Which season it is at the target (default: unchanged)",
+    )
+    p_move.set_defaults(func=cmd_move)
 
     p_relink = sub.add_parser("relink", help="Re-match recorded watches against stored episodes")
     p_relink.set_defaults(func=cmd_relink)

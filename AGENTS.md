@@ -80,6 +80,11 @@ only when the lengths are equal *and* every already-matched watch agrees with
 the ordering. That last check is what makes it a hypothesis rather than an
 assumption — never add a mapping rule without one of comparable strength.
 
+**A season can belong to another title.** The export and the catalog disagree
+about what counts as one show as often as about episodes. `upnext move` is how
+that is fixed, and it stays a person's call — TMDB has no "this is season 2 of
+that" relation, so an automatic version would be a name search and a hope.
+
 **Progress and history are different counts.** `episodes_watched` is what the
 catalog's list contains and pairs with `total_episodes`; `unmatched_watched` is
 what it does not. Never add them into one figure, and never show either without

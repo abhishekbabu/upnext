@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from upnext.domain.models import Episode, ImportedTitle, Title, TitleState, Watch
+from upnext.domain.models import Episode, ImportedTitle, Title, TitleRow, TitleState, Watch
 
 
 @dataclass(frozen=True)
@@ -86,6 +86,14 @@ class WatchLibrary(Protocol):
 
     def upsert_episode(self, title_id: int, episode: Episode) -> int:
         """Store one episode of the catalog's list."""
+        ...
+
+    def title_by_tmdb_id(self, tmdb_id: int) -> TitleRow | None:
+        """The stored title with this catalog id, if there is one."""
+        ...
+
+    def move_watches(self, *, source_id: int, target_id: int, season: int, as_season: int) -> int:
+        """Reassign one source season's viewings to a different title."""
         ...
 
     def link_watches(self, title_id: int) -> int:

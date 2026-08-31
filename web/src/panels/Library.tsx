@@ -6,7 +6,7 @@ import { Poster } from "@/components/ui/poster";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Empty, Failed, Loading } from "@/components/ui/state";
 import { STATUSES, STATUS_LABELS, type Status } from "@/lib/api";
-import { progressOf, type Progress } from "@/lib/format";
+import { progressOf } from "@/lib/format";
 import { useConfig, useTitles } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
@@ -103,13 +103,6 @@ export function Library() {
                       {progress.unmatched} watched
                     </p>
                   )}
-                  {/* Viewings TMDB's list has no episode for. Said on the card
-                      rather than only on the title, because a bar reading 100%
-                      with eight more viewings behind it is the case someone
-                      needs told about without having to click. */}
-                  {unmatchedOf(progress) > 0 && (
-                    <p className="mt-0.5 font-mono text-[10.5px] text-warn">+{unmatchedOf(progress)} not in TMDB</p>
-                  )}
                 </Link>
               </li>
             );
@@ -118,15 +111,6 @@ export function Library() {
       )}
     </>
   );
-}
-
-/** How many viewings TMDB's list cannot account for, in the cases where it can be said. */
-function unmatchedOf(progress: Progress): number {
-  if (progress.kind === "measured") return progress.unmatched;
-  if (progress.kind === "unmatched") return progress.unmatched;
-  // "counted" is an unenriched title, where everything is unmatched only
-  // because there is nothing to match against yet. Saying so would be noise.
-  return 0;
 }
 
 function FilterTab({

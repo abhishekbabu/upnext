@@ -78,6 +78,10 @@ import export_dir:
 enrich *args:
     uv run upnext enrich {{args}}
 
+# Move a season's watches to the TMDB title they belong to
+move *args:
+    uv run upnext move {{args}}
+
 # Re-match recorded watches against stored episodes (no network)
 relink:
     uv run upnext relink

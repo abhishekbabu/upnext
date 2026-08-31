@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from upnext.domain.errors import CatalogError
-from upnext.domain.models import TitleRow
+from upnext.domain.models import Status, TitleRow, TitleState
 from upnext.domain.ports import Catalog, CatalogMatch, WatchLibrary
 
 
@@ -114,3 +114,66 @@ def relink(library: WatchLibrary, titles: Iterable[TitleRow]) -> int:
     linked = sum(library.link_watches(title.id) for title in titles)
     library.commit()
     return linked
+
+
+@dataclass(slots=True)
+class MoveResult:
+    """What moving a season did."""
+
+    target: str
+    moved: int
+    linked: int
+
+
+def move_season(
+    catalog: Catalog,
+    library: WatchLibrary,
+    *,
+    source: TitleRow,
+    tmdb_id: int,
+    season: int,
+    as_season: int,
+) -> MoveResult:
+    """Move one source season's viewings to the catalog title they belong to.
+
+    The export and the catalog disagree about what counts as one show more
+    often than they disagree about episodes. TV Time files The Haunting of Bly
+    Manor as season 2 of The Haunting; TMDB keeps it as its own title. Whose
+    Line's 2013 revival is seasons 9 to 12 at one and a separate series at the
+    other. The viewings are right; the show they were filed under is not.
+
+    Deliberately something a person asks for. Finding the right title needs
+    knowledge upnext does not have — TMDB has no "this is season 2 of that"
+    relation, so anything automatic here would be a name search and a hope,
+    which is exactly the kind of invention the rest of this module refuses.
+
+    The target is created and enriched if the library does not have it, the
+    viewings are re-numbered into the target's own seasons, and matching runs
+    again from scratch.
+
+    Raises:
+        CatalogError: the catalog could not serve the target title.
+    """
+    show = catalog.fetch_show(tmdb_id)
+
+    existing = library.title_by_tmdb_id(tmdb_id)
+    if existing is None:
+        target_id = library.upsert_title(show.title)
+        # The state is a guess and there is only one worth making: whatever the
+        # user's relationship to the show they filed it under was.
+        library.set_state(target_id, TitleState(status=source.status or Status.WATCHING))
+    else:
+        target_id = existing.id
+
+    library.apply_enrichment(target_id, show.title, enriched_at=datetime.now(UTC).isoformat(timespec="seconds"))
+    for episode in show.episodes:
+        library.upsert_episode(target_id, episode)
+
+    moved = library.move_watches(source_id=source.id, target_id=target_id, season=season, as_season=as_season)
+    linked = library.link_watches(target_id)
+    # The source keeps whatever it still has, and its counts have to be redone
+    # now that a season has left it.
+    library.link_watches(source.id)
+    library.commit()
+
+    return MoveResult(target=show.title.name, moved=moved, linked=linked)
