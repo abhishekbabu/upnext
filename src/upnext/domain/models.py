@@ -119,5 +119,15 @@ class TitleRow:
     is_favorite: bool
     rating: int | None
     reported_watched: int | None
+
     episodes_watched: int
+    """Distinct episodes watched, specials excluded.
+
+    Excluded because `total_episodes` is the catalog's own count and every
+    catalog leaves season 0 out of it. Counting specials here and not there
+    makes the pair a nonsense — a show whose special you watched reads 33 of
+    32 — so the numerator follows the denominator. It is also the same rule
+    up-next already applies: season 0 is never the next thing to watch.
+    """
+
     last_watched_at: str | None
