@@ -68,6 +68,12 @@ def enrich_title(catalog: Catalog, library: WatchLibrary, title: TitleRow) -> bo
     for episode in show.episodes:
         library.upsert_episode(title.id, episode)
 
+    # The episode list is the catalog's; the history was recorded in whatever
+    # the exporting service called things. This is where the two meet, and it
+    # runs on every enrichment because a catalog that adds an episode should
+    # pick up the viewings that were waiting for it.
+    library.link_watches(title.id)
+
     library.commit()
     return True
 

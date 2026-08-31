@@ -32,18 +32,46 @@ export function episodeCode(season: number, episode: number): string {
 }
 
 /**
- * How far through a title someone is, 0 to 1, or null when it cannot be known.
+ * What can honestly be said about how far through a title someone is.
  *
- * Null for an unenriched title: without a catalog episode count there is no
- * denominator, and showing a full bar because 12 of 12 known episodes are
- * watched would claim a show is finished when the library simply has not met
- * TMDB yet. A count above the total clamps rather than overflowing — rewatches
- * are counted distinctly, but TMDB revises episode counts downward too.
+ * One number cannot carry it. TMDB's episode list is the source of truth for
+ * what a show *is*; the import is the source of truth for what was *watched*,
+ * and the two do not always divide a show the same way. A viewing TMDB's list
+ * has no episode for is still a viewing — it just cannot be a percentage.
+ *
+ * So this returns which of four things is true, and the panels render each.
  */
-export function progress(title: Pick<TitleSummary, "episodes_watched" | "total_episodes">): number | null {
-  const { episodes_watched: watched, total_episodes: total } = title;
-  if (!total || total <= 0) return null;
-  return Math.min(watched / total, 1);
+export type Progress =
+  /** Nothing watched, nothing to measure. */
+  | { kind: "none" }
+  /** Watched, but no catalog total — the title has not been enriched yet. */
+  | { kind: "counted"; watched: number }
+  /** Matched to TMDB's list, so a bar means what it looks like. */
+  | { kind: "measured"; watched: number; total: number; share: number; unmatched: number }
+  /**
+   * TMDB has a list and not one viewing is on it. A 0% bar beside 320 watched
+   * episodes would be true and would read as "not started", so there is none:
+   * the counts say it better.
+   */
+  | { kind: "unmatched"; unmatched: number; total: number };
+
+export function progressOf(
+  title: Pick<TitleSummary, "episodes_watched" | "unmatched_watched" | "total_episodes">,
+): Progress {
+  const { episodes_watched: watched, unmatched_watched: unmatched, total_episodes: total } = title;
+
+  // Checked first, so an unenriched title — where everything is unmatched only
+  // because there is nothing to match against — reads as a plain count.
+  if (!total || total <= 0) {
+    const all = watched + unmatched;
+    return all > 0 ? { kind: "counted", watched: all } : { kind: "none" };
+  }
+
+  if (watched === 0 && unmatched > 0) return { kind: "unmatched", unmatched, total };
+
+  // Clamped: TMDB revises episode counts downward as contributors edit, and a
+  // list that shrinks below what was matched against it should read as done.
+  return { kind: "measured", watched, total, share: Math.min(watched / total, 1), unmatched };
 }
 
 /**

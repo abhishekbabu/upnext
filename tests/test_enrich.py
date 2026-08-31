@@ -97,8 +97,8 @@ def test_enrichment_fills_the_title_and_every_episode(library: Library) -> None:
     row = library.title(title.id)
     assert (row.tmdb_id, row.air_status, row.total_episodes) == (1668, "Ended", 236)
     episodes = library.episodes(title.id)
-    assert [(e["season_number"], e["episode_number"]) for e in episodes] == [(0, 1), (1, 1), (1, 2)]
-    assert episodes[1]["name"] == "The One Where It Begins"
+    assert [(e.season_number, e.episode_number) for e in episodes] == [(0, 1), (1, 1), (1, 2)]
+    assert episodes[1].name == "The One Where It Begins"
     assert library.needing_enrichment() == []
 
 

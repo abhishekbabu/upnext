@@ -39,8 +39,29 @@ export type TitleSummary = {
   is_favorite: boolean;
   /** Out of 10. upnext keeps a 10-point scale; TV Time rated out of 5. */
   rating: number | null;
-  /** Distinct episodes with at least one watch — never counts a rewatch twice. */
+  /**
+   * Distinct episodes watched that TMDB's list contains, specials excluded.
+   * The figure `total_episodes` is comparable to.
+   */
   episodes_watched: number;
+  /**
+   * Distinct episodes watched that TMDB's list does not contain, counted by
+   * what the export called them. Real viewings of something TMDB numbers
+   * differently — TheTVDB splits eight double-length Friends episodes TMDB
+   * counts once, and TV Time numbers Sidemen Sundays by year against TMDB's
+   * 1..N, where not one of 320 viewings matches.
+   */
+  unmatched_watched: number;
+  /** Null until TMDB has answered, which separates "not listed" from "not asked". */
+  enriched_at: string | null;
+  last_watched_at: string | null;
+};
+
+/** Viewings of an episode TMDB's list does not contain, in the export's numbering. */
+export type UnmatchedViewing = {
+  season_number: number;
+  episode_number: number;
+  watch_count: number;
   last_watched_at: string | null;
 };
 
@@ -67,6 +88,7 @@ export type TitleDetail = TitleSummary & {
   tmdb_id: number | null;
   imdb_id: string | null;
   episodes: EpisodeRow[];
+  unmatched: UnmatchedViewing[];
 };
 
 export type UpNextItem = {

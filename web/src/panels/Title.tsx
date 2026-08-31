@@ -5,12 +5,12 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Poster } from "@/components/ui/poster";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Empty, Failed, Loading } from "@/components/ui/state";
-import type { EpisodeRow } from "@/lib/api";
-import { episodeCode, progress, shortDate } from "@/lib/format";
+import type { EpisodeRow, UnmatchedViewing } from "@/lib/api";
+import { episodeCode, progressOf, shortDate } from "@/lib/format";
 import { useConfig, useTitle } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
-/** One title: its artwork and facts, then every episode grouped by season. */
+/** One title: its artwork and facts, every episode by season, and what TMDB missed. */
 export function Title() {
   const { id } = useParams();
   const config = useConfig();
@@ -21,7 +21,9 @@ export function Title() {
   if (error) return <Failed error={error} />;
   if (isPending || config.isPending) return <Loading />;
 
-  const share = progress(data);
+  const progress = progressOf(data);
+  const specials = data.episodes.filter((episode) => episode.season_number === 0);
+  const watchedSpecials = specials.filter((episode) => episode.watch_count > 0).length;
 
   return (
     <>
@@ -53,27 +55,48 @@ export function Title() {
             <p className="mt-4 max-w-[70ch] text-[13.5px] leading-relaxed text-muted-foreground">{data.overview}</p>
           )}
 
-          {share !== null && (
-            <div className="mt-5 max-w-sm">
-              <ProgressBar value={share} />
-              <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">
-                {data.episodes_watched} of {data.total_episodes} episodes
+          <div className="mt-5 max-w-sm">
+            {progress.kind === "measured" && (
+              <>
+                <ProgressBar value={progress.share} />
+                <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">
+                  {progress.watched} of {progress.total} episodes
+                </p>
+              </>
+            )}
+            {progress.kind === "counted" && (
+              <p className="font-mono text-[11px] text-muted-foreground">
+                {progress.watched} episodes watched — not enriched yet, so there is nothing to measure against
               </p>
-            </div>
-          )}
-          {share === null && data.episodes_watched > 0 && (
-            <p className="mt-5 font-mono text-[11px] text-muted-foreground">
-              {data.episodes_watched} episodes watched — no catalog count to measure against yet
-            </p>
-          )}
+            )}
+            {progress.kind === "unmatched" && (
+              <p className="font-mono text-[11px] text-muted-foreground">
+                {progress.unmatched} episodes watched, none of them on TMDB&rsquo;s {progress.total}-episode list
+              </p>
+            )}
+            {/* Specials are excluded from TMDB's episode count, so they are
+                excluded from the figure above too — otherwise a watched special
+                reads as 33 of 32. They are still watched, and still listed. */}
+            {watchedSpecials > 0 && (
+              <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+                plus {watchedSpecials} {watchedSpecials === 1 ? "special" : "specials"}, which TMDB counts separately
+              </p>
+            )}
+          </div>
         </div>
       </div>
+
+      {data.unmatched.length > 0 && <Unmatched viewings={data.unmatched} />}
 
       <div className="mt-10">
         {seasons.length === 0 ? (
           <Empty
-            title="No episodes"
-            detail="This title has not been enriched, or TMDB has no episode list for it. Its watches are still counted."
+            title="No episode list"
+            detail={
+              data.enriched_at
+                ? "TMDB has no episodes for this title. Everything you watched is still recorded above."
+                : "Run `upnext enrich` to fetch this show's episodes from TMDB."
+            }
           />
         ) : (
           seasons.map(([season, episodes]) => (
@@ -103,9 +126,8 @@ export function Title() {
                       {episode.watch_count > 0 && (
                         <span className="inline-flex items-center gap-1 font-mono text-[10.5px] text-ok">
                           <Check className="size-3.5" aria-hidden />
-                          {/* A rewatch is a fact worth keeping: the count is
-                              shown only when it is more than one, so an
-                              ordinary watch stays a tick. */}
+                          {/* A rewatch is a fact worth keeping: the count shows
+                              only above one, so an ordinary watch stays a tick. */}
                           {episode.watch_count > 1 ? `×${episode.watch_count}` : ""}
                           <span className="sr-only">
                             watched {episode.watch_count} {episode.watch_count === 1 ? "time" : "times"}
@@ -121,6 +143,68 @@ export function Title() {
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Viewings TMDB's episode list has no episode for.
+ *
+ * Its own section rather than rows mixed into the seasons above: these are not
+ * episodes of this show as TMDB understands it, and interleaving them would put
+ * the export's numbering back inside the catalog's — which is the shape this
+ * whole design exists to undo. They are still viewings, and they still happened.
+ */
+function Unmatched({ viewings }: { viewings: UnmatchedViewing[] }) {
+  const total = viewings.reduce((sum, viewing) => sum + viewing.watch_count, 0);
+
+  return (
+    <section className="mt-10 rounded-md border border-warn/40 bg-warn/5 p-4">
+      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-warn">Not in TMDB</h2>
+      <p className="mt-1.5 max-w-[70ch] text-[13px] leading-relaxed text-muted-foreground">
+        {viewings.length} {viewings.length === 1 ? "episode" : "episodes"} you watched
+        {total > viewings.length && ` (${total} viewings)`} that TMDB&rsquo;s list does not contain. Your history and
+        TMDB divide this show differently — a service that splits a double-length episode in two, or files a sequel
+        series as another season, leaves entries here. They are counted as watched everywhere except the progress
+        figure, which can only measure against TMDB&rsquo;s list.
+      </p>
+      {viewings.length <= INLINE_LIMIT ? (
+        <Chips viewings={viewings} />
+      ) : (
+        // A show numbered wholly differently leaves hundreds of these, and an
+        // unbroken wall of them buries the episode list underneath. Folded, so
+        // the count leads and the detail is one click away rather than gone.
+        <details className="mt-3 group">
+          <summary className="cursor-pointer text-[13px] text-muted-foreground marker:text-muted-foreground hover:text-foreground">
+            Show all {viewings.length}
+          </summary>
+          <div className="max-h-80 overflow-y-auto">
+            <Chips viewings={viewings} />
+          </div>
+        </details>
+      )}
+    </section>
+  );
+}
+
+/** Beyond this many, the list folds. Eight reads at a glance; three hundred does not. */
+const INLINE_LIMIT = 24;
+
+function Chips({ viewings }: { viewings: UnmatchedViewing[] }) {
+  return (
+    <ul className="mt-3 flex flex-wrap gap-1.5">
+      {viewings.map((viewing) => (
+        <li
+          key={`${viewing.season_number}x${viewing.episode_number}`}
+          className="rounded-sm bg-background px-1.5 py-0.5 font-mono text-[10.5px] text-muted-foreground"
+        >
+          {episodeCode(viewing.season_number, viewing.episode_number)}
+          {viewing.watch_count > 1 && ` ×${viewing.watch_count}`}
+          {viewing.last_watched_at && (
+            <span className="ml-1.5 text-muted-foreground/70">{shortDate(viewing.last_watched_at)}</span>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

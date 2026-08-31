@@ -6,7 +6,7 @@ import { Poster } from "@/components/ui/poster";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Empty, Failed, Loading } from "@/components/ui/state";
 import { STATUSES, STATUS_LABELS, type Status } from "@/lib/api";
-import { progress } from "@/lib/format";
+import { progressOf, type Progress } from "@/lib/format";
 import { useConfig, useTitles } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
@@ -67,7 +67,7 @@ export function Library() {
       ) : (
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-x-5 gap-y-7">
           {shown.map((title) => {
-            const share = progress(title);
+            const progress = progressOf(title);
             return (
               <li key={title.id}>
                 <Link
@@ -87,20 +87,28 @@ export function Library() {
                     <StatusBadge status={title.status} />
                     {title.year && <span className="font-mono text-[10.5px] text-muted-foreground">{title.year}</span>}
                   </div>
-                  {share !== null && (
+                  {progress.kind === "measured" && (
                     <>
-                      <ProgressBar value={share} className="mt-2" />
+                      <ProgressBar value={progress.share} className="mt-2" />
                       <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">
-                        {title.episodes_watched} / {title.total_episodes}
+                        {progress.watched} / {progress.total}
                       </p>
                     </>
                   )}
-                  {/* No bar without a catalog count — see `progress`. The count
-                      alone is still worth showing, because it is real. */}
-                  {share === null && title.episodes_watched > 0 && (
+                  {progress.kind === "counted" && (
+                    <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">{progress.watched} watched</p>
+                  )}
+                  {progress.kind === "unmatched" && (
                     <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">
-                      {title.episodes_watched} watched
+                      {progress.unmatched} watched
                     </p>
+                  )}
+                  {/* Viewings TMDB's list has no episode for. Said on the card
+                      rather than only on the title, because a bar reading 100%
+                      with eight more viewings behind it is the case someone
+                      needs told about without having to click. */}
+                  {unmatchedOf(progress) > 0 && (
+                    <p className="mt-0.5 font-mono text-[10.5px] text-warn">+{unmatchedOf(progress)} not in TMDB</p>
                   )}
                 </Link>
               </li>
@@ -110,6 +118,15 @@ export function Library() {
       )}
     </>
   );
+}
+
+/** How many viewings TMDB's list cannot account for, in the cases where it can be said. */
+function unmatchedOf(progress: Progress): number {
+  if (progress.kind === "measured") return progress.unmatched;
+  if (progress.kind === "unmatched") return progress.unmatched;
+  // "counted" is an unenriched title, where everything is unmatched only
+  // because there is nothing to match against yet. Saying so would be noise.
+  return 0;
 }
 
 function FilterTab({
