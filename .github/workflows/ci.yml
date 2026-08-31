@@ -59,6 +59,40 @@ jobs:
         # deselected by the marker, so CI needs no API key.
         run: uvx --from rust-just just coverage-gate
 
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: web/.node-version
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      # --frozen-lockfile fails if pnpm-lock.yaml is stale relative to
+      # package.json, so a dependency change that skipped `pnpm install` cannot
+      # land — the same guarantee `uv sync --locked` gives the Python side.
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm exec tsc -b
+
+      - run: pnpm test
+
+      # Builds because the bundle budget is checked by the build and nothing
+      # else.
+      - run: pnpm build
+
   hygiene:
     name: hygiene
     runs-on: ubuntu-latest

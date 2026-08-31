@@ -24,7 +24,7 @@ lock:
 # Quality
 # ============================================================================
 
-# Everything CI runs
+# Everything CI runs for the Python side
 check: lint typecheck check-agents coverage-gate
     @echo "All checks passed."
 
@@ -86,6 +86,31 @@ stats:
 doctor:
     uv run python scripts/doctor.py
 
-# Serve the API on http://localhost:8000
+# Build the UI and serve everything from one process (http://localhost:8000)
+ui: web-build
+    uv run upnext serve
+
+# API only, reloading on change. Pair with `just web` in a second terminal.
 serve:
     uv run upnext serve
+
+# UI dev server with hot reload (http://localhost:5173), proxying /api to `just serve`
+web:
+    cd web && pnpm dev
+
+# Install front-end dependencies
+web-install:
+    cd web && pnpm install
+
+# Compile the UI into web/dist, which `ui` then serves
+web-build: web-install
+    cd web && pnpm build
+
+# Lint, typecheck, test and build the front end — this is what CI runs
+check-web: web-install
+    cd web && pnpm lint
+    cd web && pnpm exec tsc -b
+    cd web && pnpm test
+    # Builds because the bundle budget is checked by the build and nothing
+    # else. Without this the recipe passes on a change CI then rejects.
+    cd web && pnpm build

@@ -92,4 +92,27 @@ Anything hitting TMDB is marked `integration` and deselected by default. Fakes
 implement the port, not the vendor's payload shape.
 
 **Dependencies.** Anything imported directly gets declared directly, never relied
-on transitively. Bound both ends (`>=X.Y.Z,<NEXT_MAJOR`), then `just lock`.
+on transitively. Bound both ends (`>=X.Y.Z,<NEXT_MAJOR`), then `just lock`. On
+the front end, `pnpm add` and commit `pnpm-lock.yaml` — CI installs `--frozen-lockfile`.
+
+## The front end
+
+`just check-web` must pass alongside `just check`; CI runs them as separate jobs.
+
+**Color comes from tokens**, never a raw Tailwind palette utility — `bg-card`,
+not `bg-neutral-50`. A raw utility cannot follow a mode change, and eslint
+rejects one. Light and dark are one class on `<html>`; the tokens resolve
+through `light-dark()` and no JavaScript recolors anything.
+
+**The API client is the contract.** `web/src/lib/api.ts` mirrors the wire models
+in `adapters/inbound/web/api.py`. Change one and change the other in the same
+commit — a field read here that the server stopped sending is a typecheck
+failure, which is the point.
+
+**Formatting lives in `lib/format.ts`** and is pure and tested. A panel that
+formats a date or an episode code itself will drift from the one beside it.
+Anything locale-dependent takes the locale as an argument, so a test can pin it.
+
+**The entry bundle has a gzip budget** enforced by `pnpm build`. Everything in
+it is time the page is blank. Raise it deliberately, with the reason in the
+commit, or defer the code behind a dynamic import.
