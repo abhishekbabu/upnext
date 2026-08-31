@@ -268,4 +268,9 @@ change to a use case.
 - Season-level progress and a "what's airing this week" view.
 
 Agent rules live in [`AGENTS.md`](AGENTS.md); `CLAUDE.md` is a symlink to it, so
-there is one file rather than two that drift. `just check-agents` enforces that.
+there is one file rather than two that drift. Skills live in
+[`.agents/skills/`](.agents/skills/) — `improve` (audit the repo and write
+implementation plans), `review-tests` (the bar for tests here) and
+`thermo-nuclear-code-quality-review` (a strict maintainability pass).
+`just check-agents` enforces the symlink, the 200-line cap on `AGENTS.md`, and
+that every skill has frontmatter and an index entry.

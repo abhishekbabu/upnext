@@ -3,34 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import one_show
 
 from upnext import bootstrap
 from upnext.adapters.inbound.cli import commands as cli
 from upnext.adapters.outbound.store.db import connect, open_library
 from upnext.adapters.outbound.store.library import Library
 from upnext.domain.models import Episode, Status, Title, TitleState, Watch
-from upnext.domain.models import Episode as CatalogEpisode
-from upnext.domain.ports import CatalogShow
-
-
-class FakeCatalog:
-    """The `Catalog` port with one show on it, for the move tests."""
-
-    def __init__(self, name: str, tmdb_id: int, episodes: list[tuple[int, int]] | None = None) -> None:
-        pairs = episodes or [(1, 1)]
-        self.show = CatalogShow(
-            title=Title(name=name, tmdb_id=tmdb_id, total_episodes=len(pairs)),
-            episodes=[CatalogEpisode(season_number=s, episode_number=n) for s, n in pairs],
-        )
-
-    def find_by_tvdb(self, tvdb_id: int):
-        return None
-
-    def search_shows(self, name: str, *, year: int | None = None):
-        return []
-
-    def fetch_show(self, catalog_id: int) -> CatalogShow:
-        return self.show
 
 
 def test_import_ingests_an_export_and_reports_what_it_did(export_dir: Path, tmp_path: Path, capsys) -> None:
@@ -212,7 +191,7 @@ def test_move_sends_a_season_to_the_title_it_belongs_to(tmp_path: Path, monkeypa
     monkeypatch.setattr(
         bootstrap,
         "build_catalog",
-        lambda settings: FakeCatalog("The Haunting of Bly Manor", 109958),
+        lambda settings: one_show("The Haunting of Bly Manor", 109958, [(1, 1)]),
     )
     assert (
         cli.main(
@@ -232,9 +211,7 @@ def test_move_reports_what_the_target_could_not_place(tmp_path: Path, monkeypatc
     title_id = a_haunting_library(db)
 
     # A target whose episode list has no place for the moved viewing.
-    monkeypatch.setattr(
-        bootstrap, "build_catalog", lambda settings: FakeCatalog("Bly Manor", 109958, episodes=[(1, 9)])
-    )
+    monkeypatch.setattr(bootstrap, "build_catalog", lambda settings: one_show("Bly Manor", 109958, [(1, 9)]))
     cli.main(["--db", str(db), "move", "--title", str(title_id), "--season", "2", "--to", "109958", "--as-season", "1"])
 
     assert "1 did not — see the title page." in capsys.readouterr().out

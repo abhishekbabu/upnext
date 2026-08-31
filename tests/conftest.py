@@ -7,6 +7,27 @@ import pytest
 
 from upnext.adapters.outbound.store.db import connect
 from upnext.adapters.outbound.store.library import Library
+from upnext.domain.models import Episode, Kind, Title
+from upnext.domain.ports import CatalogMatch, CatalogShow
+
+
+@pytest.fixture(autouse=True)
+def _isolate_from_local_env(request, monkeypatch, tmp_path_factory):
+    """Keep the suite off this machine's key and library.
+
+    `settings.py` finds `.env` by absolute path on purpose, so that `upnext`
+    works from any directory — which also means a test calling `load_settings()`
+    would read the real key off a developer's disk and nothing off CI's. The
+    same test would then pass here and fail there, or worse, quietly reach TMDB.
+
+    Environment variables win over the dotenv file in pydantic-settings, so
+    setting them empty is enough. Integration tests are exempt: reaching TMDB is
+    the whole of their job, and they skip themselves when there is no key.
+    """
+    if request.node.get_closest_marker("integration"):
+        return
+    monkeypatch.setenv("UPNEXT_TMDB_API_KEY", "")
+    monkeypatch.setenv("UPNEXT_DB_PATH", str(tmp_path_factory.mktemp("library") / "library.db"))
 
 
 @pytest.fixture
@@ -181,3 +202,70 @@ def row(created_at, s_id, ep_id, key, series, season, episode) -> dict:
         "season_number": "" if season is None else str(season),
         "episode_number": "" if episode is None else str(episode),
     }
+
+
+# ── the catalog, without TMDB ───────────────────────────────────────────
+
+FRIENDS = Title(
+    name="Friends",
+    kind=Kind.SHOW,
+    year=1994,
+    tmdb_id=1668,
+    tvdb_id=79168,
+    imdb_id="tt0108778",
+    air_status="Ended",
+    first_air_date="1994-09-22",
+    total_episodes=236,
+    runtime=22,
+)
+
+FRIENDS_EPISODES = [
+    Episode(season_number=0, episode_number=1, name="Special", tmdb_id=90),
+    Episode(season_number=1, episode_number=1, name="The One Where It Begins", runtime=22, tmdb_id=1),
+    Episode(season_number=1, episode_number=2, name="The One With the Sonogram", runtime=22, tmdb_id=2),
+]
+
+
+class FakeCatalog:
+    """The `Catalog` port, without TMDB.
+
+    One fake for one port, here rather than in each module that needs it — a
+    second fake for the same port is how two tests come to disagree about what
+    the real thing does.
+
+    Speaks domain types because the port does. A fake that had to build TMDB's
+    JSON would be testing the adapter's translation a second time, in the wrong
+    place, and would go stale the day a second catalog appeared.
+    """
+
+    def __init__(
+        self,
+        *,
+        found: CatalogMatch | None = None,
+        search_results: list[CatalogMatch] | None = None,
+        title: Title | None = None,
+        episodes: list[Episode] | None = None,
+    ) -> None:
+        self.found = found
+        self.search_results = search_results or []
+        self.title = title or FRIENDS
+        self.episodes = FRIENDS_EPISODES if episodes is None else episodes
+        self.searched: list[str] = []
+
+    def find_by_tvdb(self, tvdb_id: int) -> CatalogMatch | None:
+        return self.found
+
+    def search_shows(self, name: str, *, year: int | None = None) -> list[CatalogMatch]:
+        self.searched.append(name)
+        return self.search_results
+
+    def fetch_show(self, catalog_id: int) -> CatalogShow:
+        return CatalogShow(title=self.title, episodes=self.episodes)
+
+
+def one_show(name: str, tmdb_id: int, episodes: list[tuple[int, int]]) -> FakeCatalog:
+    """A catalog holding a single show, for the cases that only need a target."""
+    return FakeCatalog(
+        title=Title(name=name, tmdb_id=tmdb_id, total_episodes=len(episodes)),
+        episodes=[Episode(season_number=s, episode_number=n) for s, n in episodes],
+    )

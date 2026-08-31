@@ -3,6 +3,10 @@
 Project overview, setup, architecture and commands live in [`README.md`](README.md).
 This file is only the rules an agent needs that the README does not already state.
 
+Skills live in [`.agents/skills/`](.agents/skills/); see
+[`.agents/AGENTS.md`](.agents/AGENTS.md) for the index. `review-tests` carries
+the bar for writing tests here and is worth reading before adding any.
+
 ## Before committing
 
 `just check` (lint, format, types, tests, 95% coverage floor) must pass. The

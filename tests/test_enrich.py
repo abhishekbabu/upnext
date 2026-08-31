@@ -1,58 +1,12 @@
 from __future__ import annotations
 
+from conftest import FakeCatalog
+
 from upnext.adapters.outbound.store.library import Library
 from upnext.application.enrichment import enrich, enrich_title, resolve_show
 from upnext.domain.errors import CatalogError
-from upnext.domain.models import Episode, Status, Title, TitleState
-from upnext.domain.ports import CatalogMatch, CatalogShow
-
-FRIENDS = Title(
-    name="Friends",
-    year=1994,
-    tmdb_id=1668,
-    tvdb_id=79168,
-    imdb_id="tt0108778",
-    air_status="Ended",
-    first_air_date="1994-09-22",
-    total_episodes=236,
-    runtime=22,
-)
-
-EPISODES = [
-    Episode(season_number=0, episode_number=1, name="Special", tmdb_id=90),
-    Episode(season_number=1, episode_number=1, name="The One Where It Begins", runtime=22, tmdb_id=1),
-    Episode(season_number=1, episode_number=2, name="The One With the Sonogram", runtime=22, tmdb_id=2),
-]
-
-
-class FakeCatalog:
-    """The `Catalog` port, without TMDB.
-
-    Speaks domain types because the port does — a fake that had to build TMDB's
-    JSON would be testing the adapter's translation twice over.
-    """
-
-    def __init__(
-        self,
-        *,
-        found: CatalogMatch | None = None,
-        search_results: list[CatalogMatch] | None = None,
-        episodes: list[Episode] | None = None,
-    ) -> None:
-        self.found = found
-        self.search_results = search_results or []
-        self.episodes = EPISODES if episodes is None else episodes
-        self.searched: list[str] = []
-
-    def find_by_tvdb(self, tvdb_id: int) -> CatalogMatch | None:
-        return self.found
-
-    def search_shows(self, name: str, *, year: int | None = None) -> list[CatalogMatch]:
-        self.searched.append(name)
-        return self.search_results
-
-    def fetch_show(self, catalog_id: int) -> CatalogShow:
-        return CatalogShow(title=FRIENDS, episodes=self.episodes)
+from upnext.domain.models import Status, Title, TitleState
+from upnext.domain.ports import CatalogMatch
 
 
 def imported(library: Library, **kwargs):
