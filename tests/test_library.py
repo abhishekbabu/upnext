@@ -145,3 +145,43 @@ def test_unnumbered_watches_still_count_toward_the_title(library: Library) -> No
     # No episode to count, but the viewing is on record and dated.
     assert row.episodes_watched == 0
     assert row.last_watched_at == "2019-01-01 00:00:00"
+
+
+def test_progress_counts_the_same_episodes_the_catalog_counted(library: Library) -> None:
+    """Specials are out of both the numerator and the denominator, or neither.
+
+    TMDB's `number_of_episodes` excludes season 0, so counting a watched
+    special toward progress reads as 9 of 8 — which is how INVINCIBLE showed
+    33 of 32 with every row correct.
+    """
+    title_id = a_show(library, "INVINCIBLE", tvdb_id=368207)
+    library.apply_enrichment(
+        title_id,
+        Title(name="INVINCIBLE", tvdb_id=368207, total_episodes=8),
+        enriched_at="2026-01-01T00:00:00+00:00",
+    )
+    for number in range(1, 9):
+        library.record_watch(title_id, Watch(watched_at=f"2024-01-{number:02d} 00:00:00", episode=(1, number)))
+    library.record_watch(title_id, Watch(watched_at="2024-02-01 00:00:00", episode=(0, 1)))
+
+    row = library.title(title_id)
+    assert (row.episodes_watched, row.total_episodes) == (8, 8)
+    # The special is still stored, still watched, and still shown on the title.
+    assert len(library.episodes(title_id)) == 9
+    # And it still counts as viewing: the library-wide total is not about a
+    # catalog's idea of a season.
+    assert library.stats()["episodes_watched"] == 9
+
+
+def test_a_watch_with_no_episode_keeps_its_timestamp(library: Library) -> None:
+    """The Beyblade case: a watch the export could not number.
+
+    Joining episodes to read a season must not drop the row — its timestamp is
+    what puts the title in the right place on a shelf.
+    """
+    title_id = a_show(library, "Beyblade", tvdb_id=70799)
+    library.record_watch(title_id, Watch(watched_at="2017-03-07 05:27:58", episode=None))
+
+    row = library.title(title_id)
+    assert row.episodes_watched == 0
+    assert row.last_watched_at == "2017-03-07 05:27:58"

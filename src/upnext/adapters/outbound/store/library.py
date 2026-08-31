@@ -215,11 +215,14 @@ class Library:
         rows = self.conn.execute(
             f"""
             SELECT t.*, s.status, s.is_favorite, s.rating, s.reported_watched,
-                   COUNT(DISTINCT w.episode_id) AS episodes_watched,
+                   COUNT(DISTINCT CASE WHEN e.season_number > 0 THEN w.episode_id END) AS episodes_watched,
                    MAX(w.watched_at) AS last_watched_at
             FROM titles t
             LEFT JOIN title_state s ON s.title_id = t.id
             LEFT JOIN watches w ON w.title_id = t.id
+            -- Only to read the season off a watch. LEFT so a watch the export
+            -- could not number keeps its row and its timestamp.
+            LEFT JOIN episodes e ON e.id = w.episode_id
             {clause}
             GROUP BY t.id
             ORDER BY last_watched_at DESC NULLS LAST, t.name
@@ -232,11 +235,14 @@ class Library:
         row = self.conn.execute(
             """
             SELECT t.*, s.status, s.is_favorite, s.rating, s.reported_watched,
-                   COUNT(DISTINCT w.episode_id) AS episodes_watched,
+                   COUNT(DISTINCT CASE WHEN e.season_number > 0 THEN w.episode_id END) AS episodes_watched,
                    MAX(w.watched_at) AS last_watched_at
             FROM titles t
             LEFT JOIN title_state s ON s.title_id = t.id
             LEFT JOIN watches w ON w.title_id = t.id
+            -- Only to read the season off a watch. LEFT so a watch the export
+            -- could not number keeps its row and its timestamp.
+            LEFT JOIN episodes e ON e.id = w.episode_id
             WHERE t.id = ?
             GROUP BY t.id
             """,
