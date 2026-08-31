@@ -72,11 +72,13 @@ something that is not the source of truth for it — that shape is what made a
 complete Friends read 236 of 228.
 
 **Matching is exact on episode number, never approximate.** A near miss written
-into `episodes` is a guess in the one table that must not contain any. Season
-*labels* are the exception and only via catalog evidence: a season number at or
-above `SEASON_IS_A_YEAR` is a year, not an index, and resolves to whichever
-catalog season aired then. Arithmetic alone — inferring an offset because two
-episode counts happen to sum — is not evidence.
+into `episodes` is a guess in the one table that must not contain any. Two
+shape disagreements are resolvable, and both must stay evidence-led: a season
+number at or above `SEASON_IS_A_YEAR` is a year and resolves by the catalog's
+air dates; a source that split a run the catalog keeps flat maps ordinally, but
+only when the lengths are equal *and* every already-matched watch agrees with
+the ordering. That last check is what makes it a hypothesis rather than an
+assumption — never add a mapping rule without one of comparable strength.
 
 **Progress and history are different counts.** `episodes_watched` is what the
 catalog's list contains and pairs with `total_episodes`; `unmatched_watched` is

@@ -78,6 +78,10 @@ import export_dir:
 enrich *args:
     uv run upnext enrich {{args}}
 
+# Re-match recorded watches against stored episodes (no network)
+relink:
+    uv run upnext relink
+
 # Summarise the library
 stats:
     uv run upnext stats

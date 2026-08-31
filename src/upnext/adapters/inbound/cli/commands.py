@@ -14,7 +14,7 @@ from upnext import bootstrap
 from upnext.adapters.inbound.cli import output
 from upnext.adapters.outbound.store.db import open_library
 from upnext.adapters.outbound.store.library import Library
-from upnext.application.enrichment import enrich
+from upnext.application.enrichment import enrich, relink
 from upnext.application.importing import import_export
 from upnext.config.settings import load_settings
 from upnext.domain.errors import UpnextError
@@ -62,6 +62,16 @@ def cmd_enrich(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_relink(args: argparse.Namespace) -> int:
+    settings = load_settings()
+    with open_library(args.db or settings.db_path) as conn:
+        library = Library(conn)
+        linked = relink(library, library.titles())
+        unmatched = [row for row in library.titles() if row.unmatched_watched]
+    output.relinked(linked, unmatched)
+    return EXIT_OK
+
+
 def cmd_stats(args: argparse.Namespace) -> int:
     settings = load_settings()
     with open_library(args.db or settings.db_path) as conn:
@@ -96,6 +106,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_enrich = sub.add_parser("enrich", help="Resolve imported titles against TMDB")
     p_enrich.add_argument("--limit", type=int, default=None, help="Only enrich the first N titles")
     p_enrich.set_defaults(func=cmd_enrich)
+
+    p_relink = sub.add_parser("relink", help="Re-match recorded watches against stored episodes")
+    p_relink.set_defaults(func=cmd_relink)
 
     p_stats = sub.add_parser("stats", help="Summarise the library")
     p_stats.set_defaults(func=cmd_stats)

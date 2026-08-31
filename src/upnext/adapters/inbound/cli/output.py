@@ -55,6 +55,19 @@ def enrichment_done(result: EnrichmentResult) -> None:
             print(f"  - {name}")
 
 
+def relinked(linked: int, unmatched: list[TitleRow]) -> None:
+    print(f"Matched {linked} more {'watch' if linked == 1 else 'watches'} to episodes.")
+    if not unmatched:
+        print("Every watch is accounted for by TMDB's episode lists.")
+        return
+    # Named rather than totalled: these are the titles where the export and
+    # TMDB genuinely describe the show differently, and which they are is the
+    # useful part.
+    print("\nNot in TMDB's lists (kept, and shown on the title page):")
+    for row in sorted(unmatched, key=lambda r: -r.unmatched_watched):
+        print(f"  {row.name[:38]:<38} {row.episodes_watched}/{row.total_episodes or '?'}  +{row.unmatched_watched}")
+
+
 def stats(summary: dict) -> None:
     print(f"{summary['episodes_watched']} episodes across {summary['titles_watched']} titles")
     if summary["first_watch"]:

@@ -221,9 +221,17 @@ class Library:
         the second pass does it: a source season that is plainly a year, not an
         index, is aliased to the catalog season that aired in it.
 
+        The third handles a catalog that keeps a show in one flat run where the
+        source split it into seasons — and only when the two can be shown to
+        describe the same episodes. See `_link_by_flattened_season`.
+
         Returns how many watches found an episode.
         """
-        return self._link_by_season_number(title_id) + self._link_by_season_year(title_id)
+        return (
+            self._link_by_season_number(title_id)
+            + self._link_by_season_year(title_id)
+            + self._link_by_flattened_season(title_id)
+        )
 
     def _link_by_season_number(self, title_id: int) -> int:
         """The ordinary case: both sides number the season the same way."""
@@ -249,6 +257,104 @@ class Library:
             {"title_id": title_id},
         )
         return cursor.rowcount
+
+    def _link_by_flattened_season(self, title_id: int) -> int:
+        """The source split a run the catalog keeps flat.
+
+        TMDB lists Yu-Gi-Oh! Duel Monsters as one season of 224 episodes;
+        TheTVDB splits the same 224 into five. Nothing about a season number
+        can bridge that, but the two orderings can still be laid side by side —
+        if, and only if, they are the same length and provably in step.
+
+        Three conditions, all of which must hold:
+
+        1. The catalog has exactly one numbered season. Anything else and the
+           two are not disagreeing about grouping, they are disagreeing about
+           content, and this has nothing to say.
+        2. The source names exactly as many distinct episodes as that season
+           holds. A partially watched show cannot satisfy this, which is the
+           point: without a complete run there is no way to know how long the
+           source's seasons were, and the offsets would be invented.
+        3. Every watch that already matched by number agrees with the ordering.
+           This is the load-bearing one — it makes the mapping a hypothesis the
+           existing matches confirm, rather than an assumption. For Duel
+           Monsters the first forty-nine already match one-to-one, and they go
+           on matching under the ordinal reading; if they did not, the reading
+           would be wrong and nothing is written.
+        """
+        seasons = self.conn.execute(
+            "SELECT DISTINCT season_number FROM episodes WHERE title_id = ? AND season_number > 0",
+            (title_id,),
+        ).fetchall()
+        if len(seasons) != 1:
+            return 0
+
+        catalog = self.conn.execute(
+            """
+            SELECT id, season_number, episode_number FROM episodes
+             WHERE title_id = ? AND season_number > 0
+             ORDER BY season_number, episode_number
+            """,
+            (title_id,),
+        ).fetchall()
+        source = self.conn.execute(
+            """
+            SELECT DISTINCT source_season, source_episode FROM watches
+             WHERE title_id = ? AND source_season > 0
+             ORDER BY source_season, source_episode
+            """,
+            (title_id,),
+        ).fetchall()
+        if not catalog or len(catalog) != len(source):
+            return 0
+
+        pairs = list(zip(catalog, source, strict=True))
+        if not self._ordering_agrees_with_what_matched(title_id, pairs):
+            return 0
+
+        updated = 0
+        for episode, watched in pairs:
+            cursor = self.conn.execute(
+                """
+                UPDATE watches SET episode_id = :episode_id
+                 WHERE title_id = :title_id AND episode_id IS NULL
+                   AND source_season = :season AND source_episode = :number
+                """,
+                {
+                    "episode_id": episode["id"],
+                    "title_id": title_id,
+                    "season": watched["source_season"],
+                    "number": watched["source_episode"],
+                },
+            )
+            updated += cursor.rowcount
+        return updated
+
+    def _ordering_agrees_with_what_matched(self, title_id: int, pairs: Sequence[tuple]) -> bool:
+        """Whether every already-matched watch lands where the ordering says.
+
+        The exact-number pass has run by now, so these are matches made on
+        evidence. If the ordinal reading disagrees with even one of them, it is
+        describing a different show than the numbers are.
+        """
+        matched = {
+            (row["source_season"], row["source_episode"]): row["episode_id"]
+            for row in self.conn.execute(
+                """
+                SELECT DISTINCT source_season, source_episode, episode_id FROM watches
+                 WHERE title_id = ? AND episode_id IS NOT NULL AND source_season > 0
+                """,
+                (title_id,),
+            )
+        }
+        if not matched:
+            return False
+
+        for episode, watched in pairs:
+            key = (watched["source_season"], watched["source_episode"])
+            if key in matched and matched[key] != episode["id"]:
+                return False
+        return True
 
     def _link_by_season_year(self, title_id: int) -> int:
         """The aliased case: the source labelled the season with its year.
