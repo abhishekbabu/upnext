@@ -119,3 +119,59 @@ def test_without_a_build_the_api_still_serves(tmp_path: Path, monkeypatch) -> No
 
     with TestClient(app) as bare:
         assert bare.get("/").status_code == 404
+
+
+def test_a_title_detail_carries_the_catalog_columns(tmp_path: Path) -> None:
+    """The response model promises these; the read model has to actually hold them.
+
+    `TitleRow` once stopped at what a shelf draws, so overview, artwork and the
+    air dates were served as null however full the database was — a contract the
+    API advertised and never met.
+    """
+    db_path = tmp_path / "library.db"
+    library = Library(connect(db_path))
+    title_id = library.upsert_title(Title(name="Avatar: The Last Airbender", tvdb_id=1))
+    library.set_state(title_id, TitleState(status=Status.WATCHING))
+    library.apply_enrichment(
+        title_id,
+        Title(
+            name="Avatar: The Last Airbender",
+            tmdb_id=82452,
+            imdb_id="tt9018736",
+            overview="A young boy known as the Avatar…",
+            poster_path="/poster.jpg",
+            backdrop_path="/backdrop.jpg",
+            air_status="Returning Series",
+            first_air_date="2024-02-22",
+            last_air_date="2024-02-22",
+            total_episodes=15,
+            runtime=52,
+        ),
+        enriched_at="2026-01-01T00:00:00+00:00",
+    )
+    library.conn.commit()
+    library.conn.close()
+
+    app.dependency_overrides[get_settings] = lambda: Settings(db_path=db_path, tmdb_api_key="")
+    try:
+        body = TestClient(app).get(f"/api/titles/{title_id}").json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert body["overview"] == "A young boy known as the Avatar…"
+    assert body["backdrop_path"] == "/backdrop.jpg"
+    assert body["first_air_date"] == "2024-02-22"
+    assert body["last_air_date"] == "2024-02-22"
+    assert body["imdb_id"] == "tt9018736"
+    assert body["runtime"] == 52
+
+
+def test_the_shelf_payload_stays_lean(api: TestClient) -> None:
+    """A list of 160 titles does not carry 160 synopses.
+
+    The read model holds every column; what crosses the wire is the response
+    model's decision, and the shelf draws none of these.
+    """
+    first = api.get("/api/titles").json()[0]
+    assert "overview" not in first
+    assert "backdrop_path" not in first
