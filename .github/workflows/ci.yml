@@ -49,6 +49,11 @@ jobs:
       - name: Type check
         run: uvx --from rust-just just typecheck
 
+      - name: Agent docs
+        # CLAUDE.md is a symlink to AGENTS.md. A checkout that turned it into a
+        # copy, or an edit that outgrew the cap, fails here rather than drifting.
+        run: uvx --from rust-just just check-agents
+
       - name: Tests and coverage floor
         # The default suite is hermetic — the TMDB integration test is
         # deselected by the marker, so CI needs no API key.

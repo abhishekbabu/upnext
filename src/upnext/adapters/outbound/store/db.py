@@ -12,7 +12,7 @@ SCHEMA_RESOURCE = "schema.sql"
 
 
 def read_schema() -> str:
-    return resources.files("upnext.store").joinpath(SCHEMA_RESOURCE).read_text(encoding="utf-8")
+    return resources.files("upnext.adapters.outbound.store").joinpath(SCHEMA_RESOURCE).read_text(encoding="utf-8")
 
 
 def connect(db_path: Path | str) -> sqlite3.Connection:

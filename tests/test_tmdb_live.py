@@ -1,15 +1,17 @@
 """The one test that talks to TMDB. Opt in with `just test-integration`.
 
 Everything else about enrichment is covered against fakes; this exists to catch
-the thing fakes cannot — TMDB changing the shape of what it returns.
+the thing fakes cannot — TMDB changing the shape of what it returns. It runs
+through the `Catalog` port, so it also checks that the translation from TMDB's
+JSON to the domain still holds.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from upnext.catalog.tmdb import TMDBClient, title_from_show
-from upnext.settings import load_settings
+from upnext.adapters.outbound.catalog.tmdb import TMDBClient
+from upnext.config.settings import load_settings
 
 pytestmark = pytest.mark.integration
 
@@ -26,17 +28,22 @@ def test_a_tvdb_id_from_the_export_resolves_to_the_right_show(client: TMDBClient
     # 79168 is Friends' TheTVDB id, exactly as a TV Time export carries it.
     found = client.find_by_tvdb(79168)
     assert found is not None
-
-    title = title_from_show(client.show(found["id"]))
-    assert title.name == "Friends"
-    assert title.year == 1994
-    assert title.tvdb_id == 79168
-    assert title.total_episodes == 236
+    assert (found.catalog_id, found.name, found.year) == (1668, "Friends", 1994)
 
 
-def test_a_season_comes_back_with_numbered_episodes(client: TMDBClient) -> None:
-    from upnext.catalog.tmdb import episodes_from_season
+def test_fetching_a_show_brings_back_its_episodes(client: TMDBClient) -> None:
+    show = client.fetch_show(1668)
 
-    episodes = episodes_from_season(client.season(1668, 1))
-    assert len(episodes) == 24
-    assert episodes[0].episode_number == 1
+    assert show.title.name == "Friends"
+    assert show.title.year == 1994
+    assert show.title.tvdb_id == 79168
+    # Not an exact count: TMDB excludes specials and counts each double-length
+    # episode once, and revises both as contributors edit. The field being a
+    # plausible whole-series number is the shape check; 236 was not.
+    assert show.title.total_episodes is not None
+    assert show.title.total_episodes > 200
+
+    # Season 0 is carried through, so specials the user logged keep their rows.
+    seasons = {episode.season_number for episode in show.episodes}
+    assert seasons >= {0, 1, 10}
+    assert len(show.episodes) > 200

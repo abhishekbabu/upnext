@@ -3,15 +3,14 @@ from __future__ import annotations
 import pytest
 import requests
 
-from upnext.catalog.tmdb import (
-    RetryableTMDBError,
+from upnext.adapters.outbound.catalog.tmdb import (
     TMDBClient,
-    TMDBError,
     episodes_from_season,
     title_from_movie,
     title_from_show,
 )
-from upnext.models import Kind
+from upnext.domain.errors import CatalogError, ConfigurationError, RetryableCatalogError
+from upnext.domain.models import Kind
 
 
 class FakeResponse:
@@ -55,7 +54,7 @@ def no_backoff_sleep(monkeypatch) -> None:
 
 
 def test_a_missing_key_fails_before_any_request() -> None:
-    with pytest.raises(TMDBError, match="No TMDB API key"):
+    with pytest.raises(ConfigurationError, match="No TMDB API key"):
         TMDBClient("")
 
 
@@ -74,39 +73,78 @@ def test_a_timeout_is_retried_and_then_succeeds() -> None:
 
 
 def test_a_rate_limit_is_retried(monkeypatch) -> None:
-    monkeypatch.setattr("upnext.catalog.tmdb.time.sleep", lambda _: None)
+    monkeypatch.setattr("upnext.adapters.outbound.catalog.tmdb.time.sleep", lambda _: None)
     session = FakeSession(FakeResponse(429, headers={"Retry-After": "0"}), FakeResponse(payload={"id": 1}))
     assert client(session).show(1) == {"id": 1}
 
 
 def test_retries_give_up_and_surface_the_failure() -> None:
     session = FakeSession(*[FakeResponse(503) for _ in range(4)])
-    with pytest.raises(RetryableTMDBError):
+    with pytest.raises(RetryableCatalogError):
         client(session).show(1)
     assert len(session.calls) == 4
 
 
 def test_a_404_is_not_retried() -> None:
     session = FakeSession(FakeResponse(404))
-    with pytest.raises(TMDBError, match="nothing at"):
+    with pytest.raises(CatalogError, match="nothing at"):
         client(session).show(1)
     assert len(session.calls) == 1
 
 
 def test_a_401_is_reported_rather_than_retried() -> None:
     session = FakeSession(FakeResponse(401, payload={"status_message": "Invalid API key"}))
-    with pytest.raises(TMDBError, match="401"):
+    with pytest.raises(CatalogError, match="401"):
         client(session).show(1)
 
 
 def test_find_by_tvdb_returns_the_first_tv_result() -> None:
-    session = FakeSession(FakeResponse(payload={"tv_results": [{"id": 1668}], "movie_results": []}))
-    assert client(session).find_by_tvdb(79168) == {"id": 1668}
+    session = FakeSession(
+        FakeResponse(payload={"tv_results": [{"id": 1668, "name": "Friends", "first_air_date": "1994-09-22"}]})
+    )
+    found = client(session).find_by_tvdb(79168)
+    assert (found.catalog_id, found.name, found.year) == (1668, "Friends", 1994)
 
 
 def test_find_by_tvdb_returns_none_when_tmdb_has_no_mapping() -> None:
     session = FakeSession(FakeResponse(payload={"tv_results": []}))
     assert client(session).find_by_tvdb(1) is None
+
+
+def test_search_shows_carries_the_year_for_resolution_to_check() -> None:
+    session = FakeSession(
+        FakeResponse(payload={"results": [{"id": 60735, "name": "The Flash", "first_air_date": "2014-10-07"}]})
+    )
+    matches = client(session).search_shows("The Flash", year=2014)
+    assert [(m.catalog_id, m.year) for m in matches] == [(60735, 2014)]
+    assert session.calls[0][1]["first_air_date_year"] == 2014
+
+
+def test_fetch_show_returns_the_title_with_every_season_walked() -> None:
+    session = FakeSession(
+        FakeResponse(payload={"id": 1668, "name": "Friends", "seasons": [{"season_number": 1}, {"season_number": 2}]}),
+        FakeResponse(payload={"episodes": [{"id": 1, "season_number": 1, "episode_number": 1, "name": "Pilot"}]}),
+        FakeResponse(payload={"episodes": [{"id": 2, "season_number": 2, "episode_number": 1, "name": "Later"}]}),
+    )
+    show = client(session).fetch_show(1668)
+    assert show.title.name == "Friends"
+    assert [(e.season_number, e.episode_number) for e in show.episodes] == [(1, 1), (2, 1)]
+
+
+def test_a_season_tmdb_cannot_serve_does_not_abandon_the_show() -> None:
+    """A season listed on the show but missing its own endpoint is a data gap."""
+    session = FakeSession(
+        FakeResponse(payload={"id": 1668, "name": "Friends", "seasons": [{"season_number": 0}, {"season_number": 1}]}),
+        FakeResponse(status_code=404),
+        FakeResponse(payload={"episodes": [{"id": 1, "season_number": 1, "episode_number": 1}]}),
+    )
+    show = client(session).fetch_show(1668)
+    assert [(e.season_number, e.episode_number) for e in show.episodes] == [(1, 1)]
+
+
+def test_a_season_the_show_did_not_number_is_skipped() -> None:
+    session = FakeSession(FakeResponse(payload={"id": 1, "name": "X", "seasons": [{"name": "Extras"}]}))
+    assert client(session).fetch_show(1).episodes == []
 
 
 def test_search_uses_the_right_year_parameter_per_kind() -> None:

@@ -84,3 +84,30 @@ class ImportedTitle:
     title: Title
     state: TitleState
     watches: list[Watch] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class TitleRow:
+    """A stored title joined with the user's state and their counted progress.
+
+    The read model, as opposed to `Title`, which is what a source says a title
+    *is*. It lives here rather than in the store because enrichment and the API
+    both speak it, and neither should import the repository to name its own
+    argument types.
+    """
+
+    id: int
+    kind: Kind
+    name: str
+    year: int | None
+    tmdb_id: int | None
+    tvdb_id: int | None
+    poster_path: str | None
+    air_status: str | None
+    total_episodes: int | None
+    status: Status | None
+    is_favorite: bool
+    rating: int | None
+    reported_watched: int | None
+    episodes_watched: int
+    last_watched_at: str | None

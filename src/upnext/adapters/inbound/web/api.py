@@ -8,10 +8,10 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 
-from upnext.models import Kind, Status
-from upnext.settings import Settings, load_settings
-from upnext.store.db import connect
-from upnext.store.library import Library
+from upnext.adapters.outbound.store.db import connect
+from upnext.adapters.outbound.store.library import Library
+from upnext.config.settings import Settings, load_settings
+from upnext.domain.models import Kind, Status
 
 app = FastAPI(title="upnext", version="0.1.0")
 

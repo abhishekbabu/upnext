@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-upnext = "upnext.cli:main"
+upnext = "upnext.adapters.inbound.cli.commands:main"
 
 [dependency-groups]
 dev = [
@@ -39,7 +39,7 @@ include = ["upnext*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-upnext = ["store/*.sql"]
+upnext = ["adapters/outbound/store/*.sql", "py.typed"]
 
 [tool.ruff]
 target-version = "py312"
@@ -81,6 +81,9 @@ omit = [
 exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",
+    # Protocol method bodies in domain/ports.py. A port has no behaviour to
+    # cover; its implementations are what the tests exercise.
+    "^\\s*\\.\\.\\.$",
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
 ]

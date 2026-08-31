@@ -1,12 +1,15 @@
-"""Reads and writes against the library, in the vocabulary of upnext.models."""
+"""The SQLite repository behind the `WatchLibrary` port.
+
+Speaks `domain.models` in both directions: nothing above this module handles a
+`sqlite3.Row`, and nothing in it decides policy.
+"""
 
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from collections.abc import Sequence
 
-from upnext.models import Episode, ImportedTitle, Kind, Status, Title, TitleState, Watch
+from upnext.domain.models import Episode, Kind, Status, Title, TitleRow, TitleState, Watch
 
 # The columns of `titles` that enrichment is allowed to overwrite. `name` and
 # `year` are not among them by default: an import names a title from the user's
@@ -25,27 +28,6 @@ ENRICHABLE = (
 )
 
 
-@dataclass(slots=True)
-class TitleRow:
-    """A title joined with the user's state and their counted progress."""
-
-    id: int
-    kind: Kind
-    name: str
-    year: int | None
-    tmdb_id: int | None
-    tvdb_id: int | None
-    poster_path: str | None
-    air_status: str | None
-    total_episodes: int | None
-    status: Status | None
-    is_favorite: bool
-    rating: int | None
-    reported_watched: int | None
-    episodes_watched: int
-    last_watched_at: str | None
-
-
 class Library:
     """A thin repository over the SQLite connection.
 
@@ -55,6 +37,10 @@ class Library:
 
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
+
+    def commit(self) -> None:
+        """Close the current unit of work. The caller decides where one ends."""
+        self.conn.commit()
 
     # ---------------------------------------------------------------- writes
 
@@ -214,18 +200,6 @@ class Library:
             ),
         )
 
-    def ingest(self, imported: Iterable[ImportedTitle]) -> int:
-        """Write a whole import in one transaction, returning the title count."""
-        count = 0
-        for item in imported:
-            title_id = self.upsert_title(item.title)
-            self.set_state(title_id, item.state)
-            for watch in item.watches:
-                self.record_watch(title_id, watch)
-            count += 1
-        self.conn.commit()
-        return count
-
     # ----------------------------------------------------------------- reads
 
     def titles(self, *, status: Status | None = None, kind: Kind | None = None) -> list[TitleRow]:
@@ -349,6 +323,10 @@ class Library:
             "known_minutes": minutes["minutes"],
             "by_status": {row["status"]: row["n"] for row in by_status},
         }
+
+    def count_titles(self) -> int:
+        """How many titles the library holds at all, enriched or not."""
+        return int(self.conn.execute("SELECT COUNT(*) AS n FROM titles").fetchone()["n"])
 
     def needing_enrichment(self, *, limit: int | None = None) -> list[TitleRow]:
         rows = self.conn.execute(

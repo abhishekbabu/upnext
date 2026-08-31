@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from upnext.settings import PROJECT_ROOT, load_settings
+from upnext.config.settings import PROJECT_ROOT, load_settings
 
 
 def test_the_env_file_is_found_by_absolute_path() -> None:

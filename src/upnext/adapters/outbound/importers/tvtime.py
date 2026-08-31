@@ -26,7 +26,8 @@ import csv
 from collections import defaultdict
 from pathlib import Path
 
-from upnext.models import ImportedTitle, Kind, Status, Title, TitleState, Watch
+from upnext.domain.errors import ExportError
+from upnext.domain.models import ImportedTitle, Kind, Status, Title, TitleState, Watch
 
 SOURCE = "tvtime"
 
@@ -39,10 +40,6 @@ RATINGS = "tv_show_rate.csv"
 # The files an export must contain for the import to mean anything. The rest
 # are optional: an account with no ratings simply has no tv_show_rate.csv.
 REQUIRED = (WATCH_RECORDS, SHOW_DATA)
-
-
-class ExportError(Exception):
-    """The folder given is not a usable TV Time export."""
 
 
 def _rows(export_dir: Path, filename: str) -> list[dict[str, str]]:
@@ -217,3 +214,17 @@ def _split_year(name: str) -> tuple[str, int | None]:
         if candidate.isdigit() and len(candidate) == 4:
             return head.strip(), int(candidate)
     return name, None
+
+
+class TVTimeExport:
+    """The `ImportSource` port over a TV Time GDPR export.
+
+    A class rather than the bare function so that a second service — the films
+    the roadmap wants, or whatever replaces TV Time next — is a registry entry
+    in `bootstrap` rather than a branch at the call site.
+    """
+
+    name = "tvtime"
+
+    def read(self, export_dir: Path) -> list[ImportedTitle]:
+        return read_export(export_dir)

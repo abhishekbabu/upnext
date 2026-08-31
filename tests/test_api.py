@@ -5,11 +5,11 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from upnext.models import Episode, Status, Title, TitleState, Watch
-from upnext.settings import Settings
-from upnext.store.db import connect
-from upnext.store.library import Library
-from upnext.web.api import app, get_settings
+from upnext.adapters.inbound.web.api import app, get_settings
+from upnext.adapters.outbound.store.db import connect
+from upnext.adapters.outbound.store.library import Library
+from upnext.config.settings import Settings
+from upnext.domain.models import Episode, Status, Title, TitleState, Watch
 
 
 @pytest.fixture
