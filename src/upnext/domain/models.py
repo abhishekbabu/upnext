@@ -94,6 +94,10 @@ class TitleRow:
     *is*. It lives here rather than in the store because enrichment and the API
     both speak it, and neither should import the repository to name its own
     argument types.
+
+    Carries every catalog column, not just the ones a shelf draws. What reaches
+    the client is decided by the response model, and a field the row silently
+    drops is a field the API promises and never sends.
     """
 
     id: int
@@ -102,9 +106,15 @@ class TitleRow:
     year: int | None
     tmdb_id: int | None
     tvdb_id: int | None
+    imdb_id: str | None
+    overview: str | None
     poster_path: str | None
+    backdrop_path: str | None
     air_status: str | None
+    first_air_date: str | None
+    last_air_date: str | None
     total_episodes: int | None
+    runtime: int | None
     status: Status | None
     is_favorite: bool
     rating: int | None

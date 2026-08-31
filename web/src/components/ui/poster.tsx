@@ -55,8 +55,11 @@ export function Poster({
 }
 
 /** Up to two initials from a title: "The Last of Us" -> "LU". */
-function initials(name: string): string {
+export function initials(name: string): string {
   const words = name
+    // Apostrophes come out before anything else splits on punctuation, so a
+    // possessive stays one word: "Aegon's Conquest" is AC, not AS.
+    .replace(/['\u2018\u2019]/g, "")
     .replace(/[^\p{L}\p{N} ]/gu, " ")
     .split(" ")
     .filter((word) => word && !STOP_WORDS.has(word.toLowerCase()));
