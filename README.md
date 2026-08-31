@@ -115,11 +115,26 @@ with and is shown apart, under **Not in TMDB** on the title page.
 
 Matching is exact on episode number and never approximate: deciding a viewing
 of S06E25 was "probably" S06E24 would put a guess into the one table that is
-supposed to be the truth. Season *labels* are a different matter, because a
-label is not a claim about content — TheTVDB numbers some shows' seasons by
-calendar year where TMDB numbers them 1..N, so a season plainly labelled `2019`
-is resolved to whichever catalog season aired in 2019, using TMDB's own air
-dates rather than a guess.
+supposed to be the truth. Two disagreements about *shape* are resolvable on
+evidence, though, and both are:
+
+- **Seasons labelled by year.** TheTVDB numbers some shows' seasons by calendar
+  year where TMDB numbers them 1..N. A season plainly labelled `2019` is
+  resolved to whichever catalog season aired in 2019, from TMDB's own air
+  dates. Sidemen Sundays matched nothing at all before this and now reads
+  320 of 461.
+- **A run the catalog keeps flat.** TMDB lists Yu-Gi-Oh! Duel Monsters as one
+  season of 224 where TheTVDB splits the same 224 into five. The two orderings
+  are laid side by side, but only when the catalog has exactly one season, the
+  source names exactly as many episodes, and every watch that already matched
+  by number agrees with the ordering — so the mapping is a hypothesis the
+  existing matches confirm rather than an assumption. A partly watched show
+  fails the second test and is left alone, because there is no way to know how
+  long its seasons were.
+
+`upnext relink` re-runs matching over a library that already has its episode
+lists. It needs no network and no key; enrichment does it per title as it goes,
+but only for titles it enriches.
 
 What is left over after that is a real disagreement, and worth seeing:
 
@@ -128,6 +143,8 @@ What is left over after that is a real disagreement, and worth seeing:
 | Friends | 228 / 228, plus 8 | TheTVDB splits the eight double-length finales TMDB counts once |
 | The Haunting | 10 / 10, plus 9 | TV Time files Bly Manor as a second season; TMDB ends the title at one |
 | Whose Line (US) | 219 / 219, plus 76 | the 2013 revival is a separate title at TMDB |
+| Yu-Gi-Oh! 5D's | 26 / 154, plus 52 | a partly watched run, so its season lengths cannot be known |
+| Jimmy Kimmel Live! | 0 / 3334, plus 5 | a nightly show the two number by different schemes entirely |
 
 ### Three other things the export gets wrong
 

@@ -52,6 +52,8 @@ def migrate(conn: sqlite3.Connection) -> None:
     an enrichment run is hundreds of API calls, so migrating is worth the lines.
     """
     _reshape_watches_onto_the_catalog(conn)
+    _drop_episode_confirmed_at(conn)
+    _stop_a_deleted_episode_deleting_the_viewing(conn)
     conn.commit()
 
 
@@ -97,6 +99,75 @@ def _reshape_watches_onto_the_catalog(conn: sqlite3.Connection) -> None:
 
     # Replaced by watches_source_numbering, which schema.sql has already made.
     conn.execute("DROP INDEX IF EXISTS watches_episode_time")
+
+
+def _drop_episode_confirmed_at(conn: sqlite3.Connection) -> None:
+    """Remove a column from a design that did not survive.
+
+    An intermediate version marked each episode with when the catalog confirmed
+    it, to tell an invented row from a real one. Keeping the two apart turned
+    out to be better done by not inventing rows at all, and the column has had
+    no reader since.
+    """
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(episodes)")}
+    if "confirmed_at" not in columns:
+        return
+    conn.execute("ALTER TABLE episodes DROP COLUMN confirmed_at")
+
+
+def _stop_a_deleted_episode_deleting_the_viewing(conn: sqlite3.Connection) -> None:
+    """Change `watches.episode_id` from ON DELETE CASCADE to SET NULL.
+
+    Under the old shape a watch could not outlive its episode, because the
+    episode was invented from the watch. Now the episode belongs to the catalog
+    and the viewing does not: a title dropped from TMDB's list must unlink the
+    watch, never delete it. That is the whole point of the reshape, and a
+    library that migrated into it while keeping the old rule would quietly lose
+    history the first time an episode went away.
+
+    SQLite cannot alter a foreign key, so the table is rebuilt. The DDL is
+    written out here rather than read from schema.sql on purpose: a migration
+    is a historical fact and has to keep saying what it meant at the time, not
+    follow the schema wherever it goes next.
+    """
+    row = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'watches'").fetchone()
+    if row is None or "ON DELETE SET NULL" in row["sql"]:
+        return
+
+    # PRAGMA foreign_keys is a no-op inside a transaction, and the rebuild has
+    # to run with enforcement off or the DROP takes the rows with it.
+    conn.commit()
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE watches_rebuilt (
+                id          INTEGER PRIMARY KEY,
+                title_id    INTEGER NOT NULL REFERENCES titles (id) ON DELETE CASCADE,
+                episode_id  INTEGER REFERENCES episodes (id) ON DELETE SET NULL,
+                watched_at  TEXT    NOT NULL,
+                is_rewatch  INTEGER NOT NULL DEFAULT 0,
+                source_season  INTEGER,
+                source_episode INTEGER,
+                source_episode_id TEXT,
+                source      TEXT    NOT NULL DEFAULT 'upnext'
+            );
+
+            INSERT INTO watches_rebuilt (id, title_id, episode_id, watched_at, is_rewatch,
+                                         source_season, source_episode, source_episode_id, source)
+                 SELECT id, title_id, episode_id, watched_at, is_rewatch,
+                        source_season, source_episode, source_episode_id, source
+                   FROM watches;
+
+            DROP TABLE watches;
+            ALTER TABLE watches_rebuilt RENAME TO watches;
+            """
+        )
+        # The indexes went with the old table; schema.sql recreates them, which
+        # is why migrations run before it rather than after.
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
 
 
 @contextmanager

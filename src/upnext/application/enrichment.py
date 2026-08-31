@@ -101,3 +101,16 @@ def enrich(
         if on_progress is not None:
             on_progress(title, ok)
     return result
+
+
+def relink(library: WatchLibrary, titles: Iterable[TitleRow]) -> int:
+    """Match recorded viewings against the episode lists already stored.
+
+    Enrichment does this per title as it goes, but only for titles it enriches
+    — so a library sitting on a full episode list never benefits from an
+    improvement to how matching works. This is that improvement applied, with
+    no network and no catalog: everything it needs is already in the library.
+    """
+    linked = sum(library.link_watches(title.id) for title in titles)
+    library.commit()
+    return linked

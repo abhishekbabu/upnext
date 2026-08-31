@@ -409,3 +409,78 @@ def test_a_season_straddling_new_year_resolves_to_where_most_of_it_aired(library
 
     matched = [e for e in library.episodes(title_id) if e.watch_count > 0]
     assert [(e.season_number, e.episode_number) for e in matched] == [(4, 2)]
+
+
+# ── a run the catalog keeps flat ────────────────────────────────────────
+
+
+def flat_show(library: Library, *, catalog: int, watched: list[tuple[int, int]]) -> int:
+    """A catalog holding one season of `catalog` episodes, against a split source."""
+    title_id = a_show(library, "Yu-Gi-Oh! Duel Monsters")
+    for season, number in watched:
+        library.record_watch(title_id, Watch(watched_at=f"2019-01-01 00:00:{number:02d}", episode=(season, number)))
+    library.apply_enrichment(
+        title_id,
+        Title(name="Yu-Gi-Oh! Duel Monsters", tvdb_id=79168, total_episodes=catalog),
+        enriched_at=ENRICHED,
+    )
+    for number in range(1, catalog + 1):
+        library.upsert_episode(title_id, Episode(season_number=1, episode_number=number))
+    library.link_watches(title_id)
+    return title_id
+
+
+def test_a_split_run_maps_onto_a_flat_one_when_the_two_are_the_same_length(library: Library) -> None:
+    """TMDB has Duel Monsters as one season of 224; TheTVDB splits it into five.
+
+    In miniature: the source's 1x1,1x2,2x1,2x2 is the catalog's 1..4.
+    """
+    title_id = flat_show(library, catalog=4, watched=[(1, 1), (1, 2), (2, 1), (2, 2)])
+
+    row = library.title(title_id)
+    assert (row.episodes_watched, row.unmatched_watched) == (4, 0)
+    assert [e.watch_count for e in library.episodes(title_id)] == [1, 1, 1, 1]
+
+
+def test_a_partly_watched_split_run_is_left_alone(library: Library) -> None:
+    """Without a complete run there is no way to know how long a source season
+    was, so the offsets would be invented. Yu-Gi-Oh! 5D's is this case: 78
+    episodes watched of a catalog 154."""
+    title_id = flat_show(library, catalog=6, watched=[(1, 1), (2, 1), (2, 2)])
+
+    row = library.title(title_id)
+    # 1x1 still matches by number; the rest are honestly unaccounted for.
+    assert (row.episodes_watched, row.unmatched_watched) == (1, 2)
+
+
+def test_the_ordering_must_agree_with_what_already_matched(library: Library) -> None:
+    """The load-bearing guard: existing matches confirm the reading, or veto it.
+
+    Here 1x3 matched by number to the catalog's third episode, but the ordinal
+    reading would put it fourth. The two disagree, so nothing is written.
+    """
+    title_id = flat_show(library, catalog=4, watched=[(1, 1), (1, 3), (2, 1), (2, 2)])
+
+    row = library.title(title_id)
+    assert row.unmatched_watched == 2
+    assert [(u.season_number, u.episode_number) for u in library.unmatched_watches(title_id)] == [(2, 1), (2, 2)]
+
+
+def test_a_catalog_with_real_seasons_is_never_flattened(library: Library) -> None:
+    """Two seasons at the catalog means the disagreement is about content."""
+    title_id = a_show(library)
+    library.record_watch(title_id, Watch(watched_at="2019-01-01 00:00:00", episode=(3, 1)))
+    library.apply_enrichment(title_id, Title(name="Friends", tvdb_id=79168, total_episodes=2), enriched_at=ENRICHED)
+    library.upsert_episode(title_id, Episode(season_number=1, episode_number=1))
+    library.upsert_episode(title_id, Episode(season_number=2, episode_number=1))
+    library.link_watches(title_id)
+
+    assert library.title(title_id).unmatched_watched == 1
+
+
+def test_nothing_is_mapped_when_no_watch_matched_by_number_first(library: Library) -> None:
+    """With no confirmed match there is nothing to check the ordering against,
+    and an unchecked ordering is a guess."""
+    title_id = flat_show(library, catalog=2, watched=[(7, 1), (8, 1)])
+
+    assert library.title(title_id).unmatched_watched == 2
