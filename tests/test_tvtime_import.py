@@ -4,8 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from upnext.importers.tvtime import ExportError, read_export
-from upnext.models import Status
+from upnext.adapters.outbound.importers.tvtime import read_export
+from upnext.domain.errors import ExportError
+from upnext.domain.models import Status
 
 
 def by_name(export_dir: Path) -> dict:

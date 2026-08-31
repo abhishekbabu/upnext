@@ -7,10 +7,10 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# The repo root, two levels up from src/upnext/settings.py. The .env is found
-# by absolute path rather than by name so that `upnext` picks it up wherever it
-# is run from, not only from the project directory.
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# The repo root, three levels up from src/upnext/config/settings.py. The .env
+# is found by absolute path rather than by name so that `upnext` picks it up
+# wherever it is run from, not only from the project directory.
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 DEFAULT_DB_PATH = Path.home() / ".upnext" / "library.db"
 

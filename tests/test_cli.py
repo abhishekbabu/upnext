@@ -4,9 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from upnext import cli
-from upnext.store.db import connect, open_library
-from upnext.store.library import Library
+from upnext.adapters.inbound.cli import commands as cli
+from upnext.adapters.outbound.store.db import connect, open_library
+from upnext.adapters.outbound.store.library import Library
+from upnext.domain.models import Title
 
 
 def test_import_ingests_an_export_and_reports_what_it_did(export_dir: Path, tmp_path: Path, capsys) -> None:
@@ -49,11 +50,34 @@ def test_enrich_without_a_key_explains_itself_rather_than_calling_tmdb(
     assert "No TMDB API key" in capsys.readouterr().err
 
 
-def test_enrich_on_an_already_enriched_library_does_nothing(tmp_path: Path, capsys) -> None:
+def test_enrich_on_an_empty_library_says_to_import_first(tmp_path: Path, capsys) -> None:
+    """An empty library and a fully enriched one both have nothing pending.
+
+    Reporting them identically sends someone hunting for a broken API key when
+    what they need is `upnext import`.
+    """
     db = tmp_path / "library.db"
     connect(db).close()
     assert cli.main(["--db", str(db), "enrich"]) == 0
-    assert "Nothing to enrich" in capsys.readouterr().out
+    assert "the library is empty" in capsys.readouterr().out
+
+
+def test_enrich_on_an_already_enriched_library_does_nothing(export_dir: Path, tmp_path: Path, capsys) -> None:
+    db = tmp_path / "library.db"
+    cli.main(["--db", str(db), "import", str(export_dir)])
+    with open_library(db) as conn:
+        library = Library(conn)
+        for title in library.needing_enrichment():
+            library.apply_enrichment(title.id, Title(name=title.name), enriched_at="2026-01-01T00:00:00+00:00")
+    capsys.readouterr()
+
+    assert cli.main(["--db", str(db), "enrich"]) == 0
+    assert "every title already has catalog data" in capsys.readouterr().out
+
+
+def test_an_unknown_import_source_is_refused(export_dir: Path, tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["--db", str(tmp_path / "l.db"), "import", str(export_dir), "--source", "letterboxd"])
 
 
 def test_enrich_walks_the_pending_titles(export_dir: Path, tmp_path: Path, monkeypatch, capsys) -> None:
@@ -64,12 +88,12 @@ def test_enrich_walks_the_pending_titles(export_dir: Path, tmp_path: Path, monke
 
     calls: list = []
 
-    def fake_enrich(client, library, titles, on_progress=None):
+    def fake_enrich(catalog, library, titles, on_progress=None):
         titles = list(titles)
         calls.append(titles)
         for title in titles:
             on_progress(title, title.name == "Arrow")
-        from upnext.catalog.enrich import EnrichmentResult
+        from upnext.application.enrichment import EnrichmentResult
 
         return EnrichmentResult(
             matched=[t.name for t in titles if t.name == "Arrow"],
@@ -94,4 +118,4 @@ def test_serve_hands_off_to_uvicorn(monkeypatch) -> None:
     seen = {}
     monkeypatch.setattr("uvicorn.run", lambda app, host, port: seen.update(app=app, host=host, port=port))
     assert cli.main(["serve", "--port", "9999"]) == 0
-    assert seen == {"app": "upnext.web.api:app", "host": "127.0.0.1", "port": 9999}
+    assert seen == {"app": "upnext.adapters.inbound.web.api:app", "host": "127.0.0.1", "port": 9999}

@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from upnext.store.db import connect
-from upnext.store.library import Library
+from upnext.adapters.outbound.store.db import connect
+from upnext.adapters.outbound.store.library import Library
 
 
 @pytest.fixture

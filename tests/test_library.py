@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from upnext.importers.tvtime import read_export
-from upnext.models import Episode, Kind, Status, Title, TitleState, Watch
-from upnext.store.library import Library
+from upnext.adapters.outbound.store.library import Library
+from upnext.domain.models import Episode, Kind, Status, Title, TitleState, Watch
 
 
 def a_show(library: Library, name: str = "Friends", **kwargs) -> int:
@@ -110,14 +109,10 @@ def test_known_minutes_counts_episode_runtime_where_it_exists(library: Library) 
     assert library.stats()["known_minutes"] == 22
 
 
-def test_an_export_round_trips_into_the_library(library: Library, export_dir) -> None:
-    count = library.ingest(read_export(export_dir))
-    assert count == 5
-    stats = library.stats()
-    assert stats["watches"] == 4
-    assert stats["by_status"] == {"watching": 1, "completed": 1, "stopped": 2, "watchlist": 1}
-    assert library.ingest(read_export(export_dir)) == 5
-    assert library.stats()["watches"] == 4
+def test_count_titles_counts_everything_stored(library: Library) -> None:
+    assert library.count_titles() == 0
+    a_show(library, "Friends", tvdb_id=1)
+    assert library.count_titles() == 1
 
 
 def test_only_unenriched_titles_are_listed_for_enrichment(library: Library) -> None:

@@ -25,18 +25,22 @@ lock:
 # ============================================================================
 
 # Everything CI runs
-check: lint typecheck coverage-gate
+check: lint typecheck check-agents coverage-gate
     @echo "All checks passed."
 
 # Lint and auto-fix, then format
 fmt:
-    uv run ruff check src/ tests/ --fix
-    uv run ruff format src/ tests/
+    uv run ruff check src/ tests/ scripts/ --fix
+    uv run ruff format src/ tests/ scripts/
 
 # Lint without fixing — fails on any finding
 lint:
-    uv run ruff check src/ tests/
-    uv run ruff format --check src/ tests/
+    uv run ruff check src/ tests/ scripts/
+    uv run ruff format --check src/ tests/ scripts/
+
+# Verify CLAUDE.md is still a symlink to AGENTS.md, and AGENTS.md still fits
+check-agents:
+    uv run python scripts/check_agent_docs.py
 
 # Type check
 typecheck:
@@ -77,6 +81,10 @@ enrich *args:
 # Summarise the library
 stats:
     uv run upnext stats
+
+# Report what this machine is configured for, and flag typo'd .env keys
+doctor:
+    uv run python scripts/doctor.py
 
 # Serve the API on http://localhost:8000
 serve:

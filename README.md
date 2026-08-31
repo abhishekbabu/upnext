@@ -28,6 +28,7 @@ cp .env.template .env              # then add a TMDB key, see below
 just import ~/Documents/tv-time-data
 just enrich
 just stats
+just doctor                        # if any of the above surprises you
 just serve                         # http://localhost:8000/docs
 ```
 
@@ -45,7 +46,8 @@ is the one command that does, and it says so up front rather than failing
 partway through.
 
 The library is a single SQLite file at `~/.upnext/library.db`. Delete it and
-re-import; nothing else holds state.
+re-import; nothing else holds state. `just doctor` reports whether the key is
+set, whether the library exists, and how much of it is still unenriched.
 
 ## Import, then enrich
 
@@ -122,24 +124,41 @@ Season 0 is specials at every source, so it is never the next thing to watch.
 ## Development
 
 ```sh
-just check              # lint, types, tests, coverage floor — what CI runs
+just check              # lint, types, agent docs, tests, coverage floor — what CI runs
 just fmt                # ruff fix + format
+just doctor             # what this machine is set up for, and what it is not
 just test               # the hermetic suite: no network, no key needed
-just test-integration   # the one test that calls TMDB (needs a key)
+just test-integration   # the tests that call TMDB (need a key)
 ```
 
-Layout:
+Layout — ports and adapters, with the dependency arrows pointing inward:
 
 ```
 src/upnext/
-  models.py           the vocabulary everything else speaks
-  settings.py         environment and .env
-  cli.py              import / enrich / stats / serve
-  store/              schema.sql, connections, the repository
-  importers/tvtime.py the export reader
-  catalog/            the TMDB client and enrichment
-  web/api.py          the read API
+  domain/              the vocabulary, the errors, and the ports the core needs
+    models.py            Title, Episode, Watch, Status — what everything speaks
+    errors.py            every failure upnext raises on purpose
+    ports.py             Catalog, WatchLibrary, ImportSource
+  application/         the use cases, working against ports only
+    enrichment.py        resolve a title against a catalog, fill in the data
+    importing.py         read an export, write a library
+  adapters/
+    inbound/             the only layer that prints or returns a status code
+      cli/                 commands.py, output.py
+      web/api.py           the read API
+    outbound/
+      catalog/tmdb.py      the Catalog port, over TMDB
+      importers/tvtime.py  the ImportSource port, over a TV Time export
+      store/               schema.sql, connections, the repository
+  config/settings.py   environment and .env
+  bootstrap.py         the one module that names concrete implementations
 ```
+
+`domain/` imports nothing else in the package, `application/` imports `domain/`
+only, and `bootstrap.py` is the single place a concrete class is named. That is
+what makes the roadmap cheap: a second importer is a registry entry, and a
+second catalog is one class satisfying one protocol, neither of which is a
+change to a use case.
 
 ## Roadmap
 
@@ -149,3 +168,6 @@ src/upnext/
 - Films: a second importer and the same tables.
 - Where to watch, from TMDB's providers endpoint.
 - Season-level progress and a "what's airing this week" view.
+
+Agent rules live in [`AGENTS.md`](AGENTS.md); `CLAUDE.md` is a symlink to it, so
+there is one file rather than two that drift. `just check-agents` enforces that.

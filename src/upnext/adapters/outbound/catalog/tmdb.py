@@ -16,25 +16,21 @@ from typing import Any
 import requests
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from upnext.models import Episode, Kind, Title
+from upnext.domain.errors import CatalogError, ConfigurationError, RetryableCatalogError
+from upnext.domain.models import Episode, Kind, Title
+from upnext.domain.ports import CatalogMatch, CatalogShow
 
 BASE_URL = "https://api.themoviedb.org/3"
 TIMEOUT_SECONDS = 15
 
 
-class TMDBError(Exception):
-    """TMDB refused a request in a way that retrying will not fix."""
-
-
-class RetryableTMDBError(Exception):
-    """A timeout, a connection failure or a 5xx — worth another attempt."""
-
-
 class TMDBClient:
-    """Synchronous, rate-limited, and deliberately narrow.
+    """The `Catalog` port, over TMDB's v3 API.
 
-    Only the five endpoints enrichment needs are exposed; anything else the app
-    grows into should be added here rather than by passing raw paths around.
+    Synchronous, rate-limited, and deliberately narrow: only the endpoints
+    enrichment needs are exposed, and anything the app grows into should be
+    added here rather than by passing raw paths around. Nothing outside this
+    module sees a TMDB payload — the port's methods translate on the way out.
     """
 
     def __init__(
@@ -46,7 +42,7 @@ class TMDBClient:
         session: requests.Session | None = None,
     ) -> None:
         if not api_key:
-            raise TMDBError("No TMDB API key. Set UPNEXT_TMDB_API_KEY (see .env.template).")
+            raise ConfigurationError("No TMDB API key. Set UPNEXT_TMDB_API_KEY (see .env.template).")
         self.api_key = api_key
         self.language = language
         self.min_interval = min_interval_seconds
@@ -64,7 +60,7 @@ class TMDBClient:
             self._last_call = time.monotonic()
 
     @retry(
-        retry=retry_if_exception_type(RetryableTMDBError),
+        retry=retry_if_exception_type(RetryableCatalogError),
         stop=stop_after_attempt(4),
         wait=wait_exponential(multiplier=0.5, max=8),
         reraise=True,
@@ -75,34 +71,55 @@ class TMDBClient:
         try:
             response = self.session.get(f"{BASE_URL}{path}", params=query, timeout=TIMEOUT_SECONDS)
         except (requests.Timeout, requests.ConnectionError) as exc:
-            raise RetryableTMDBError(str(exc)) from exc
+            raise RetryableCatalogError(str(exc)) from exc
 
         if response.status_code == 429:
             # TMDB's own guidance is to honour Retry-After; sleeping here keeps
             # the backoff in one place rather than splitting it with tenacity.
             time.sleep(float(response.headers.get("Retry-After", "1")))
-            raise RetryableTMDBError("rate limited")
+            raise RetryableCatalogError("rate limited")
         if response.status_code >= 500:
-            raise RetryableTMDBError(f"TMDB {response.status_code} for {path}")
+            raise RetryableCatalogError(f"TMDB {response.status_code} for {path}")
         if response.status_code == 404:
-            raise TMDBError(f"TMDB has nothing at {path}")
+            raise CatalogError(f"TMDB has nothing at {path}")
         if not response.ok:
-            raise TMDBError(f"TMDB {response.status_code} for {path}: {response.text[:200]}")
+            raise CatalogError(f"TMDB {response.status_code} for {path}: {response.text[:200]}")
         return response.json()
 
     # ------------------------------------------------------------- endpoints
 
-    def find_by_tvdb(self, tvdb_id: int) -> dict | None:
-        """The TMDB show behind a TheTVDB id, or None if TMDB has no mapping."""
+    def find_by_tvdb(self, tvdb_id: int) -> CatalogMatch | None:
         results = self.get("/find/" + str(tvdb_id), external_source="tvdb_id").get("tv_results") or []
-        return results[0] if results else None
+        return _match(results[0]) if results else None
 
-    def search(self, name: str, *, kind: Kind = Kind.SHOW, year: int | None = None) -> list[dict]:
-        path = "/search/tv" if kind is Kind.SHOW else "/search/movie"
+    def search_shows(self, name: str, *, year: int | None = None) -> list[CatalogMatch]:
         params: dict[str, Any] = {"query": name}
         if year is not None:
-            params["first_air_date_year" if kind is Kind.SHOW else "year"] = year
-        return self.get(path, **params).get("results") or []
+            params["first_air_date_year"] = year
+        return [_match(item) for item in self.get("/search/tv", **params).get("results") or []]
+
+    def fetch_show(self, catalog_id: int) -> CatalogShow:
+        """The show and every episode of every season TMDB will serve.
+
+        A season listed on the show but missing its own endpoint is a TMDB data
+        gap, not a reason to abandon the rest of the show — the walk is here
+        rather than in the caller because it is a fact about this API, not a
+        decision about enrichment.
+        """
+        detail = self.show(catalog_id)
+        episodes: list[Episode] = []
+        for season in detail.get("seasons") or []:
+            number = season.get("season_number")
+            if number is None:
+                continue
+            try:
+                payload = self.season(catalog_id, int(number))
+            except CatalogError:
+                continue
+            episodes.extend(episodes_from_season(payload))
+        return CatalogShow(title=title_from_show(detail), episodes=episodes)
+
+    # ------------------------------------------------------------ raw payloads
 
     def show(self, tmdb_id: int) -> dict:
         return self.get(f"/tv/{tmdb_id}", append_to_response="external_ids")
@@ -112,6 +129,14 @@ class TMDBClient:
 
     def movie(self, tmdb_id: int) -> dict:
         return self.get(f"/movie/{tmdb_id}", append_to_response="external_ids")
+
+    def search(self, name: str, *, kind: Kind = Kind.SHOW, year: int | None = None) -> list[dict]:
+        """Raw search, for films — which have no port method until they have an importer."""
+        path = "/search/tv" if kind is Kind.SHOW else "/search/movie"
+        params: dict[str, Any] = {"query": name}
+        if year is not None:
+            params["first_air_date_year" if kind is Kind.SHOW else "year"] = year
+        return self.get(path, **params).get("results") or []
 
 
 # --------------------------------------------------------------- translation
@@ -167,6 +192,14 @@ def episodes_from_season(payload: dict) -> list[Episode]:
         for item in payload.get("episodes") or []
         if item.get("season_number") is not None and item.get("episode_number") is not None
     ]
+
+
+def _match(payload: dict) -> CatalogMatch:
+    return CatalogMatch(
+        catalog_id=int(payload["id"]),
+        name=payload.get("name") or payload.get("original_name") or "",
+        year=_year(payload.get("first_air_date")),
+    )
 
 
 def _year(date: str | None) -> int | None:
