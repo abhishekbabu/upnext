@@ -16,9 +16,11 @@ Working today:
   lists, artwork, air dates and runtimes.
 - **A read API** — titles by status, a title with its episodes, up-next, stats.
 - **The up-next query** — the next unwatched episode of everything in progress.
+- **The app** — a poster shelf of what to watch next, the library filtered by
+  status, a title with every episode and what you have seen, and the totals.
 
-Not there yet: the front end, marking things watched from the app, films, and
-anywhere to see this but `curl`. See [Roadmap](#roadmap).
+Not there yet: marking things watched from the app, films, and the diary. See
+[Roadmap](#roadmap).
 
 ## Getting started
 
@@ -29,7 +31,7 @@ just import ~/Documents/tv-time-data
 just enrich
 just stats
 just doctor                        # if any of the above surprises you
-just serve                         # http://localhost:8000/docs
+just ui                            # http://localhost:8000 — the app
 ```
 
 ### The TMDB key
@@ -108,6 +110,40 @@ were watched.
   numbers. A watch is therefore identified by the source's own episode id where
   there is one, and by episode-plus-timestamp where there is not.
 
+## The app
+
+One React app, built by Vite and served by the same FastAPI process — so there
+is one port and one command in normal use:
+
+```sh
+just ui        # builds web/dist, then serves it and the API on :8000
+```
+
+While working on the front end, run the two halves apart and get hot reload:
+
+```sh
+just serve     # the API on :8000
+just web       # Vite on :5173, proxying /api across to it
+```
+
+`web/dist` is gitignored and built on demand. Without it the API still serves —
+`upnext serve` on a fresh clone is the API alone, and says so in the log.
+
+```
+web/src/
+  lib/api.ts        the client, typed against the wire models in api.py
+  lib/format.ts     posters, episode codes, progress, dates — pure and tested
+  lib/queries.ts    every query and its cache key
+  components/ui/    poster, progress bar, status badge, loading/empty/error
+  panels/           UpNext, Library, Title, Stats — one per route
+```
+
+Color comes from semantic tokens (`bg-card`, `text-muted-foreground`) that
+resolve through `light-dark()`, so light and dark are one class on `<html>` and
+no JavaScript recolors anything. A lint rule rejects a raw Tailwind palette
+utility, which cannot follow a mode change. `pnpm build` enforces a gzip budget
+on the entry bundle, because everything in it is time the page is blank.
+
 ## The API
 
 | Route | What it returns |
@@ -129,6 +165,7 @@ just fmt                # ruff fix + format
 just doctor             # what this machine is set up for, and what it is not
 just test               # the hermetic suite: no network, no key needed
 just test-integration   # the tests that call TMDB (need a key)
+just check-web          # the front end: lint, types, tests, build
 ```
 
 Layout — ports and adapters, with the dependency arrows pointing inward:
@@ -162,8 +199,7 @@ change to a use case.
 
 ## Roadmap
 
-- A front end — React and Vite, the shelf-and-poster view TV Time had, plus a
-  Letterboxd-ish diary of what was watched when.
+- A Letterboxd-ish diary of what was watched when.
 - Writes: mark watched, rate, move between statuses.
 - Films: a second importer and the same tables.
 - Where to watch, from TMDB's providers endpoint.

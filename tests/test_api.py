@@ -3,8 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from upnext.adapters.inbound.web import api as web_api
 from upnext.adapters.inbound.web.api import app, get_settings
 from upnext.adapters.outbound.store.db import connect
 from upnext.adapters.outbound.store.library import Library
@@ -80,3 +82,40 @@ def test_stats_summarise_the_library(api: TestClient) -> None:
     assert body["episodes_watched"] == 1
     assert body["known_minutes"] == 22
     assert body["by_status"] == {"watching": 1, "completed": 1}
+
+
+def test_config_hands_the_client_the_artwork_base(api: TestClient) -> None:
+    """The client joins this to a poster_path with the size it wants."""
+    assert api.get("/api/config").json() == {"image_base": "https://image.tmdb.org/t/p"}
+
+
+def test_an_unknown_api_path_is_a_404_even_with_a_build_present(tmp_path: Path, monkeypatch) -> None:
+    """Without this the SPA handler answers /api/typo with index.html and a 200.
+
+    The failure then surfaces as JSON that will not parse, rather than as the
+    missing route it is.
+    """
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><title>upnext</title>", encoding="utf-8")
+
+    app = FastAPI()
+    monkeypatch.setattr(web_api, "app", app)
+    monkeypatch.setattr(web_api, "DIST", dist)
+    web_api.mount_web()
+
+    with TestClient(app) as spa:
+        assert spa.get("/api/nope").status_code == 404
+        assert spa.get("/library").status_code == 200
+        assert "upnext" in spa.get("/library").text
+
+
+def test_without_a_build_the_api_still_serves(tmp_path: Path, monkeypatch) -> None:
+    """A fresh clone has no web/dist, and `upnext serve` must still work."""
+    app = FastAPI()
+    monkeypatch.setattr(web_api, "app", app)
+    monkeypatch.setattr(web_api, "DIST", tmp_path / "nothing-here")
+    web_api.mount_web()
+
+    with TestClient(app) as bare:
+        assert bare.get("/").status_code == 404
