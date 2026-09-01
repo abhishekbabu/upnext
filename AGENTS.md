@@ -72,8 +72,8 @@ rewrite the library.
 it. A viewing records the season and episode number the *source* used, on the
 watch, and `link_watches` matches the two once there is a list to match against.
 A row invented from a watch is a claim about a show's structure made by
-something that is not the source of truth for it — that shape is what made a
-complete Friends read 236 of 228.
+something that is not the source of truth for it, and it inflates every count
+measured against the list.
 
 **Matching is exact on episode number, never approximate.** A near miss written
 into `episodes` is a guess in the one table that must not contain any. Two
@@ -105,8 +105,8 @@ which silently swallows a gap when someone skips around. Season 0 is specials at
 every source, so it is never the next thing to watch — but its episodes are still
 stored, and filtered at query time.
 
-**The export is not safe to commit.** A TV Time export contains live OAuth
-tokens. `.gitignore` covers the usual folder names and `detect-private-key` runs
+**The export is not safe to commit.** An export contains live OAuth tokens.
+`.gitignore` covers the usual folder names and `detect-private-key` runs
 pre-commit, but the export belongs outside the repo. Only the five CSVs the
 importer names are ever read; everything else in an export is account plumbing.
 

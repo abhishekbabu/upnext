@@ -21,15 +21,14 @@ from upnext.domain.models import (
     Watch,
 )
 
-# The columns of `titles` that enrichment is allowed to overwrite. `name` and
-# `year` are not among them by default: an import names a title from the user's
-# own history, and a bad TMDB match should not silently rewrite the library.
 # A season number at or above this is a calendar year, not an index. Television
 # has not run to a nineteen-hundredth season of anything, so there is nothing to
 # be ambiguous about.
 SEASON_IS_A_YEAR = 1900
 
 # The columns of `titles` that enrichment is allowed to overwrite. `name` and
+# `year` are not among them: an import names a title from the user's own
+# history, and a bad TMDB match must not silently rewrite the library.
 ENRICHABLE = (
     "tmdb_id",
     "imdb_id",

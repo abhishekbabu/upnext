@@ -15,12 +15,12 @@ data/
 *.sqlite3
 .cache/
 
-# The TV Time export itself never belongs in the repo: alongside the viewing
-# history it carries live OAuth tokens, session IDs and IP logs.
+# An export never belongs in the repo: alongside the viewing history it
+# carries live OAuth tokens, session IDs and IP logs.
 tv-time-data/
 tv-time-export/
 
-# Front end (scaffolded later)
+# Front end
 node_modules/
 dist/
 

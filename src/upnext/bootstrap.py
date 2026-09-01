@@ -1,8 +1,7 @@
 """The composition root: the one module that names concrete implementations.
 
-Everything else works against ports. When films arrive, or a second catalog, or
-whatever replaces TV Time, this is the file that changes — and the only one
-that has to.
+Everything else works against ports, so another catalog or another importer is
+an entry here and a change to nothing else.
 """
 
 from __future__ import annotations
