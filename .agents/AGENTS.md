@@ -20,10 +20,9 @@ source of truth:
   review: abstraction quality, oversized files, spaghetti-condition growth:
   `skills/thermo-nuclear-code-quality-review/SKILL.md`
 
-`improve` and `review-tests` came from a sibling project and were reshaped for
-this one — their rules cite this repo's layering, its three counts, its
-migrations and its front end. Keep them that way: a rule illustrated with
-someone else's example stops being read.
+Every skill's rules cite this repo's own layering, its counts, its migrations
+and its front end. Keep them that way: a rule illustrated with someone else's
+example stops being read.
 
 ## Conventions
 

@@ -1,10 +1,9 @@
 """A small TMDB client — the source of truth for what a title actually is.
 
 TMDB rather than IMDb because IMDb has no free public API, and rather than
-TheTVDB because TVDB v4 gates most of its data behind a subscriber PIN. TMDB
-also covers films, which is what lets upnext grow past shows without a second
-provider, and its /find endpoint maps a TheTVDB id straight to a TMDB one —
-exactly the migration a TV Time export needs.
+TheTVDB because TVDB v4 gates most of its data behind a subscriber PIN. Its
+/find endpoint maps a TheTVDB id straight to a TMDB one, which is what makes
+enrichment an identity lookup rather than a name search.
 """
 
 from __future__ import annotations

@@ -120,8 +120,8 @@ Two or three tests from what you read that show the bar, and why.
   never the double itself.
 - **Simple is not a finding.** A one-line rule deserves a one-line test.
   `test_a_show_with_no_dates_yields_no_year` is doing its job.
-- **A test that documents a bug is doing its job.** Several tests here name the
-  failure they exist to prevent — 33 of 32, 236 of 228, a watch deleted with its
-  episode. That comment is the point, not noise.
+- **A test that documents a failure is doing its job.** Several tests here name
+  the failure they exist to prevent — a watched special counted as progress, a
+  watch deleted along with its episode. That comment is the point, not noise.
 - **Say so when a file is clean.** Do not manufacture findings to fill a table.
 - **Cite exactly**: test function name and line number, every time.

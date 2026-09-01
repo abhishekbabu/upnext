@@ -47,9 +47,8 @@ export type TitleSummary = {
   /**
    * Distinct episodes watched that TMDB's list does not contain, counted by
    * what the export called them. Real viewings of something TMDB numbers
-   * differently — TheTVDB splits eight double-length Friends episodes TMDB
-   * counts once, and TV Time numbers Sidemen Sundays by year against TMDB's
-   * 1..N, where not one of 320 viewings matches.
+   * differently — a source that splits a double-length episode TMDB counts
+   * once, or numbers seasons by year against TMDB's 1..N.
    */
   unmatched_watched: number;
   /** Null until TMDB has answered, which separates "not listed" from "not asked". */

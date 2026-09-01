@@ -219,9 +219,8 @@ def _split_year(name: str) -> tuple[str, int | None]:
 class TVTimeExport:
     """The `ImportSource` port over a TV Time GDPR export.
 
-    A class rather than the bare function so that a second service — the films
-    the roadmap wants, or whatever replaces TV Time next — is a registry entry
-    in `bootstrap` rather than a branch at the call site.
+    A class rather than the bare function so that another service is a registry
+    entry in `bootstrap` rather than a branch at the call site.
     """
 
     name = "tvtime"

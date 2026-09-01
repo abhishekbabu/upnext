@@ -1,9 +1,8 @@
 -- upnext's local library.
 --
--- One `titles` table covers shows and films from the start, keyed by `kind`,
--- so adding films later is data rather than a migration. A watch of a film is
--- a row with a null episode_id; a watch of a show is a row that points at one
--- episode.
+-- One `titles` table covers shows and films, keyed by `kind`. A watch of a
+-- film is a row with a null episode_id; a watch of a show is a row that points
+-- at one episode.
 
 PRAGMA foreign_keys = ON;
 
@@ -77,9 +76,9 @@ CREATE TABLE IF NOT EXISTS watches (
 
     -- What the exporting service called the episode watched, kept whatever the
     -- catalog turns out to say. This is the half of the record the catalog can
-    -- never supply: TV Time files Sidemen Sundays under year-numbered seasons
-    -- and TMDB numbers it 1..N, so all 320 viewings match nothing — and without
-    -- these columns "S2018E28, watched on this date" would simply be gone.
+    -- never supply: where a source numbers seasons by year and TMDB numbers
+    -- them 1..N, nothing matches, and without these columns "S2018E28, watched
+    -- on this date" would simply be gone.
     -- Null where the export declined to number the episode at all.
     source_season  INTEGER,
     source_episode INTEGER,
@@ -96,9 +95,9 @@ CREATE TABLE IF NOT EXISTS watches (
 -- Two identities, one per shape of row, both partial because a table-level
 -- UNIQUE cannot be conditional. With the source's episode id, that id and the
 -- timestamp are the viewing; without one, the episode and the timestamp are.
--- Collapsing the two into a single constraint is what a first pass did, and it
--- rejected a legitimate row: TV Time can stamp two distinct episodes with the
--- same season/episode numbers and the same second.
+-- They cannot collapse into one constraint: a source can stamp two distinct
+-- episodes with the same season/episode numbers and the same second, and a
+-- single constraint rejects the second as a duplicate.
 CREATE UNIQUE INDEX IF NOT EXISTS watches_source_episode
     ON watches (title_id, source, source_episode_id, watched_at)
     WHERE source_episode_id IS NOT NULL;

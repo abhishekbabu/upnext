@@ -137,10 +137,10 @@ def move_season(
     """Move one source season's viewings to the catalog title they belong to.
 
     The export and the catalog disagree about what counts as one show more
-    often than they disagree about episodes. TV Time files The Haunting of Bly
-    Manor as season 2 of The Haunting; TMDB keeps it as its own title. Whose
-    Line's 2013 revival is seasons 9 to 12 at one and a separate series at the
-    other. The viewings are right; the show they were filed under is not.
+    often than they disagree about episodes: a spin-off filed as season 2 of its
+    parent, or a revival filed as later seasons of the original, where TMDB
+    keeps each as its own title. The viewings are right; the show they were
+    filed under is not.
 
     Deliberately something a person asks for. Finding the right title needs
     knowledge upnext does not have — TMDB has no "this is season 2 of that"
