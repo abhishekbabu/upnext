@@ -30,6 +30,10 @@ export function useUpNext(limit = 24) {
   return useQuery({ queryKey: ["up-next", limit], queryFn: () => api.upNext(limit) });
 }
 
+export function useAiring(limit = 24) {
+  return useQuery({ queryKey: ["airing", limit], queryFn: () => api.airing(limit) });
+}
+
 export function useStats() {
   return useQuery({ queryKey: ["stats"], queryFn: api.stats });
 }

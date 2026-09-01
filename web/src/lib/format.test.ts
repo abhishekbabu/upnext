@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { episodeCode, hours, poster, progressOf, shortDate, titleWithYear } from "@/lib/format";
+import { airingDay, episodeCode, hours, poster, progressOf, shortDate, titleWithYear } from "@/lib/format";
 
 const BASE = "https://image.tmdb.org/t/p";
 
@@ -120,5 +120,41 @@ describe("titleWithYear", () => {
   it("appends the year when there is one", () => {
     expect(titleWithYear("The Flash", 2014)).toBe("The Flash (2014)");
     expect(titleWithYear("Friends", null)).toBe("Friends");
+  });
+});
+
+describe("airingDay", () => {
+  const TODAY = "2026-09-01";
+
+  it("names today and tomorrow rather than dating them", () => {
+    expect(airingDay(TODAY, TODAY)).toBe("Today");
+    expect(airingDay("2026-09-02", TODAY)).toBe("Tomorrow");
+  });
+
+  it("gives a weekday and a date for anything further out", () => {
+    // Asserted by part rather than as one string: how a locale punctuates a
+    // date, and whether September abbreviates to "Sep" or "Sept", is ICU's
+    // business and changes between runtimes. What must hold is that all three
+    // parts are there.
+    const label = airingDay("2026-09-08", TODAY, "en-GB");
+    expect(label).toContain("Tue");
+    expect(label).toContain("8");
+    expect(label).toContain("Sep");
+  });
+
+  it("adds the year only once the calendar leaves this one", () => {
+    // A list running a few weeks out does not need it; one reaching January
+    // does, or the first of January is four months ambiguous.
+    expect(airingDay("2026-12-25", TODAY, "en-GB")).not.toContain("2026");
+    expect(airingDay("2027-01-01", TODAY, "en-GB")).toContain("2027");
+  });
+
+  it("crosses a month end without arithmetic of its own", () => {
+    expect(airingDay("2026-10-01", "2026-09-30")).toBe("Tomorrow");
+  });
+
+  it("says nothing about a date it cannot parse", () => {
+    expect(airingDay("", TODAY)).toBe("");
+    expect(airingDay("not-a-date", TODAY)).toBe("");
   });
 });

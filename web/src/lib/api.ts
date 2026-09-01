@@ -105,6 +105,28 @@ export type UpNextItem = {
   last_watched_at: string | null;
 };
 
+/**
+ * An episode airing today or later, of a show with watch history.
+ *
+ * Mirrors `UpNextItem` field for field and is deliberately its own type: that
+ * one is a backlog and this one is a schedule, and `air_date` is non-null here
+ * because it is what the list is ordered and grouped by.
+ */
+export type AiringItem = {
+  title_id: number;
+  name: string;
+  kind: Kind;
+  year: number | null;
+  poster_path: string | null;
+  episode_id: number;
+  season_number: number;
+  episode_number: number;
+  episode_name: string | null;
+  air_date: string;
+  still_path: string | null;
+  last_watched_at: string | null;
+};
+
 export type Stats = {
   watches: number;
   episodes_watched: number;
@@ -155,5 +177,6 @@ export const api = {
     request<TitleSummary[]>(status ? `/api/titles?status=${encodeURIComponent(status)}` : "/api/titles"),
   title: (id: number) => request<TitleDetail>(`/api/titles/${id}`),
   upNext: (limit = 24) => request<UpNextItem[]>(`/api/up-next?limit=${limit}`),
+  airing: (limit = 24) => request<AiringItem[]>(`/api/airing?limit=${limit}`),
   stats: () => request<Stats>("/api/stats"),
 };

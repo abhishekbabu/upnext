@@ -124,3 +124,77 @@ def test_unnumbered_watches_still_count_toward_the_title(library: Library) -> No
     # No episode to count, but the viewing is on record and dated.
     assert row.episodes_watched == 0
     assert row.last_watched_at == "2019-01-01 00:00:00"
+
+
+TODAY = "2026-06-15"
+
+
+def test_airing_next_starts_at_today_and_leaves_yesterday_behind(library: Library) -> None:
+    """Today is upcoming; the day before it has already happened."""
+    title_id = a_show(library)
+    library.upsert_episode(title_id, Episode(season_number=1, episode_number=1, air_date="2026-06-14"))
+    library.upsert_episode(title_id, Episode(season_number=1, episode_number=2, air_date=TODAY))
+    library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
+
+    airing = library.airing_next(TODAY)
+    assert [row["air_date"] for row in airing] == [TODAY]
+
+
+def test_airing_next_covers_shows_watched_whatever_their_status(library: Library) -> None:
+    """A show returning after a break is filed `stopped` or `completed`, not `watching`.
+
+    Status is an opinion about a show; a watch is a fact. Filtering on status
+    would empty this list of exactly the shows it exists to surface.
+    """
+    stopped = a_show(library, name="Ted Lasso")
+    library.set_state(stopped, TitleState(status=Status.STOPPED))
+    library.upsert_episode(stopped, Episode(season_number=4, episode_number=5, air_date="2026-07-01"))
+    library.record_watch(stopped, Watch(watched_at="2023-01-01 00:00:00", episode=(1, 1)))
+
+    airing = library.airing_next(TODAY)
+    assert [row["name"] for row in airing] == ["Ted Lasso"]
+
+
+def test_airing_next_ignores_a_show_never_watched(library: Library) -> None:
+    """A scheduled episode of something never seen is not "up next" for anyone.
+
+    An enriched library is full of these: anything on the watchlist, and every
+    show followed and then abandoned before an episode was logged.
+    """
+    unwatched = a_show(library, name="Reacher")
+    library.set_state(unwatched, TitleState(status=Status.WATCHLIST))
+    library.upsert_episode(unwatched, Episode(season_number=4, episode_number=6, air_date="2026-07-01"))
+
+    assert library.airing_next(TODAY) == []
+
+
+def test_airing_next_skips_specials_and_episodes_with_no_date(library: Library) -> None:
+    """Season 0 is never the next thing to watch, and an undated episode is unscheduled."""
+    title_id = a_show(library)
+    library.upsert_episode(title_id, Episode(season_number=0, episode_number=1, air_date="2026-07-01"))
+    library.upsert_episode(title_id, Episode(season_number=2, episode_number=1, air_date=None))
+    library.upsert_episode(title_id, Episode(season_number=2, episode_number=2, air_date="2026-07-02"))
+    library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(2, 1)))
+
+    airing = library.airing_next(TODAY)
+    assert [(row["season_number"], row["episode_number"]) for row in airing] == [(2, 2)]
+
+
+def test_airing_next_is_ordered_by_the_calendar_across_shows(library: Library) -> None:
+    """The soonest episode leads, whichever show it belongs to."""
+    for name, air_date in [("Stick", "2026-11-03"), ("Chad Powers", "2026-09-03"), ("Shark Tank", "2026-09-30")]:
+        title_id = a_show(library, name=name)
+        library.upsert_episode(title_id, Episode(season_number=2, episode_number=1, air_date=air_date))
+        library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
+
+    airing = library.airing_next(TODAY)
+    assert [row["name"] for row in airing] == ["Chad Powers", "Shark Tank", "Stick"]
+
+
+def test_airing_next_honours_its_limit(library: Library) -> None:
+    title_id = a_show(library)
+    for number in range(1, 6):
+        library.upsert_episode(title_id, Episode(season_number=2, episode_number=number, air_date="2026-07-01"))
+    library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
+
+    assert len(library.airing_next(TODAY, limit=3)) == 3

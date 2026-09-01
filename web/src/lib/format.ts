@@ -84,15 +84,59 @@ export function progressOf(
 export function shortDate(value: string | null, locale?: string): string {
   if (!value) return "";
   // Timestamps arrive as "2018-05-12 01:10:14" and air dates as "2018-05-12".
-  // Only the date half is ever shown, and parsing just that avoids a timezone
-  // shifting a watch onto the previous day.
-  const [datePart] = value.split(/[ T]/);
-  if (!datePart) return "";
-  const [year, month, day] = datePart.split("-").map(Number);
-  if (!year || !month || !day) return "";
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (Number.isNaN(date.getTime())) return "";
+  // Only the date half is ever shown.
+  const date = utcDate(value);
+  if (!date) return "";
   return date.toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
+/**
+ * The heading one day of the airing calendar sits under: "Today", "Tomorrow",
+ * or "Mon, 7 Sep".
+ *
+ * `today` is a parameter rather than `new Date()` for the same reason `locale`
+ * is: a function that reads the clock cannot be asserted against, and this one
+ * draws the boundary the whole list depends on. Both are "YYYY-MM-DD", which
+ * compares as text, so nothing here builds a Date to decide the label — only
+ * to name the weekday.
+ *
+ * The year appears only when it is not the current one. A calendar of the next
+ * few weeks does not need it; one reaching into January does.
+ */
+export function airingDay(airDate: string, today: string, locale?: string): string {
+  if (airDate === today) return "Today";
+
+  const date = utcDate(airDate);
+  if (!date) return "";
+
+  const todayDate = utcDate(today);
+  if (todayDate && date.getTime() - todayDate.getTime() === DAY_MS) return "Tomorrow";
+
+  return date.toLocaleDateString(locale, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: todayDate && date.getUTCFullYear() !== todayDate.getUTCFullYear() ? "numeric" : undefined,
+    timeZone: "UTC",
+  });
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The date half of a timestamp or an air date, as a UTC Date.
+ *
+ * Parsing only the date half is what keeps a timezone from shifting a watch
+ * onto the previous day, and returning null rather than an Invalid Date makes
+ * every caller handle the miss.
+ */
+function utcDate(value: string): Date | null {
+  const [datePart] = value.split(/[ T]/);
+  if (!datePart) return null;
+  const [year, month, day] = datePart.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 /** "2,509 hours", or "" below an hour — a floor is not worth a rounding argument. */

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -134,6 +135,28 @@ class UpNextItem(BaseModel):
     last_watched_at: str | None = None
 
 
+class AiringItem(BaseModel):
+    """One episode airing today or later, of a show with watch history.
+
+    Same shape as `UpNextItem` and deliberately a separate model: they answer
+    different questions, and `air_date` is the whole point here rather than an
+    incidental fact, so it is required.
+    """
+
+    title_id: int
+    name: str
+    kind: Kind
+    year: int | None = None
+    poster_path: str | None = None
+    episode_id: int
+    season_number: int
+    episode_number: int
+    episode_name: str | None = None
+    air_date: str
+    still_path: str | None = None
+    last_watched_at: str | None = None
+
+
 class Stats(BaseModel):
     watches: int
     episodes_watched: int
@@ -155,7 +178,13 @@ def get_library(settings: Annotated[Settings, Depends(get_settings)]) -> Iterato
     # safe to share across threads and FastAPI runs sync endpoints in a pool,
     # so a cached connection is not an option and a leaked one is a file handle
     # per request.
-    conn = connect(settings.db_path)
+    #
+    # `same_thread_only=False` because this request's three stages — building
+    # the dependency, running the endpoint, closing it again — are each handed
+    # a thread from that pool, and sqlite3's own check cannot tell them apart
+    # from genuine concurrent use. They run one after another; nothing here is
+    # shared with another request.
+    conn = connect(settings.db_path, same_thread_only=False)
     try:
         yield Library(conn)
     finally:
@@ -203,6 +232,15 @@ def get_title(title_id: int, library: LibraryDep) -> TitleDetail:
 @app.get("/api/up-next")
 def up_next(library: LibraryDep, limit: Annotated[int, Query(ge=1, le=100)] = 20) -> list[UpNextItem]:
     return [UpNextItem.model_validate(row) for row in library.up_next(limit=limit)]
+
+
+@app.get("/api/airing")
+def airing(library: LibraryDep, limit: Annotated[int, Query(ge=1, le=100)] = 20) -> list[AiringItem]:
+    # Today is decided here rather than in SQL so the query stays testable
+    # against a fixed calendar. UTC because that is what everything else in
+    # upnext compares in, and an air date carries no timezone of its own.
+    today = datetime.now(UTC).date().isoformat()
+    return [AiringItem.model_validate(row) for row in library.airing_next(today, limit=limit)]
 
 
 @app.get("/api/stats")
