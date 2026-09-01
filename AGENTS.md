@@ -89,6 +89,20 @@ about what counts as one show as often as about episodes. `upnext move` is how
 that is fixed, and it stays a person's call — TMDB has no "this is season 2 of
 that" relation, so an automatic version would be a name search and a hope.
 
+**A backlog and a schedule are different questions.** `up_next` is the lowest
+unwatched episode of what is in progress; `airing_next` is what has not come out
+yet, ordered by the calendar. Never merge them. `airing_next` selects on watch
+history, not `status` — a show returning after a break is filed `completed` or
+`stopped`, so a status filter empties the list of its whole point — and it takes
+`today` as an argument rather than reading the clock, so the boundary it draws
+can be tested.
+
+**The web layer's connections cross threads.** `connect(..., same_thread_only=
+False)` in `get_library`, and nowhere else. FastAPI hands the dependency, the
+endpoint and the teardown three separately borrowed threadpool threads; they run
+in sequence and never overlap, so sqlite3's own check only produces intermittent
+500s. `TestClient` drives the app from one thread and will not reproduce it.
+
 **Progress and history are different counts.** `episodes_watched` is what the
 catalog's list contains and pairs with `total_episodes`; `unmatched_watched` is
 what it does not. Never add them into one figure, and never show either without

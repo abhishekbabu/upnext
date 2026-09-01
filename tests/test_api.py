@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -113,6 +114,31 @@ def test_an_unknown_api_path_is_a_404_even_with_a_build_present(tmp_path: Path, 
         assert "upnext" in spa.get("/library").text
 
 
+def test_the_page_revalidates_and_its_hashed_assets_do_not(tmp_path: Path, monkeypatch) -> None:
+    """A rebuilt front end has to reach a browser that has been here before.
+
+    index.html keeps its name and names this build's bundle, so a browser left
+    to its own heuristics serves a cached one and with it yesterday's app —
+    which is what made a rebuild need a hard reload to show up. Everything under
+    assets/ is the opposite: Vite puts a content hash in the filename, so the
+    URL changes whenever the bytes do and the old one can be kept for good.
+    """
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><title>upnext</title>", encoding="utf-8")
+    (dist / "assets" / "index-abc123.js").write_text("console.log(1)", encoding="utf-8")
+
+    app = FastAPI()
+    monkeypatch.setattr(web_api, "app", app)
+    monkeypatch.setattr(web_api, "DIST", dist)
+    web_api.mount_web()
+
+    with TestClient(app) as client:
+        assert client.get("/").headers["cache-control"] == "no-cache"
+        assert client.get("/library").headers["cache-control"] == "no-cache"
+        assert "immutable" in client.get("/assets/index-abc123.js").headers["cache-control"]
+
+
 def test_without_a_build_the_api_still_serves(tmp_path: Path, monkeypatch) -> None:
     """A fresh clone has no web/dist, and `upnext serve` must still work."""
     app = FastAPI()
@@ -178,3 +204,70 @@ def test_the_shelf_payload_stays_lean(api: TestClient) -> None:
     first = api.get("/api/titles").json()[0]
     assert "overview" not in first
     assert "backdrop_path" not in first
+
+
+@pytest.fixture
+def airing_api(tmp_path: Path) -> TestClient:
+    """A library with one watched show that has both a past and a future episode.
+
+    Its own fixture rather than the shared one because the calendar is the only
+    thing it asserts, and adding a future episode to `Friends` would change what
+    every other test there counts.
+    """
+    db_path = tmp_path / "airing.db"
+    library = Library(connect(db_path))
+
+    lasso = library.upsert_title(Title(name="Ted Lasso", tmdb_id=97546))
+    library.set_state(lasso, TitleState(status=Status.STOPPED))
+    library.upsert_episode(lasso, Episode(season_number=1, episode_number=1, air_date="2000-01-01"))
+    library.upsert_episode(
+        lasso, Episode(season_number=4, episode_number=5, name="Riches of Embarrassment", air_date="2099-01-01")
+    )
+    library.record_watch(lasso, Watch(watched_at="2023-01-01 00:00:00", episode=(1, 1), source="tvtime"))
+
+    # Never watched, so nothing of it belongs on a list of what to watch next.
+    reacher = library.upsert_title(Title(name="Reacher", tmdb_id=108978))
+    library.set_state(reacher, TitleState(status=Status.WATCHLIST))
+    library.upsert_episode(reacher, Episode(season_number=4, episode_number=6, air_date="2099-01-02"))
+
+    library.conn.commit()
+    library.conn.close()
+
+    app.dependency_overrides[get_settings] = lambda: Settings(db_path=db_path, tmdb_api_key="")
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+
+
+def test_airing_lists_only_future_episodes_of_watched_shows(airing_api: TestClient) -> None:
+    body = airing_api.get("/api/airing").json()
+    assert [(item["name"], item["season_number"], item["episode_number"]) for item in body] == [("Ted Lasso", 4, 5)]
+    assert body[0]["air_date"] == "2099-01-01"
+    assert body[0]["episode_name"] == "Riches of Embarrassment"
+
+
+def test_airing_takes_a_limit(airing_api: TestClient) -> None:
+    assert airing_api.get("/api/airing?limit=0").status_code == 422
+    assert len(airing_api.get("/api/airing?limit=1").json()) == 1
+
+
+def test_the_web_layer_opens_connections_it_can_use_off_thread() -> None:
+    """The API's connections must outlive the thread that opened them.
+
+    FastAPI hands the dependency, the endpoint it feeds and the teardown three
+    separately borrowed threadpool threads, so a per-request connection is
+    opened on one and used on another. sqlite3 refuses that by default, which
+    made every endpoint an intermittent 500 once a page asked for more than one
+    at a time. Asserted on `get_library` rather than through `TestClient`,
+    which drives the app from a single thread and never reproduces it.
+    """
+    settings = Settings(db_path=":memory:", tmdb_api_key="")
+    # The generator is held, not just advanced: dropping it runs the `finally`
+    # that closes the connection, and the failure becomes a closed database
+    # rather than the cross-thread one under test.
+    connections = web_api.get_library(settings)
+    library = next(connections)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            assert pool.submit(lambda: library.stats()["watches"]).result() == 0
+    finally:
+        connections.close()

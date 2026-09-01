@@ -15,18 +15,27 @@ def read_schema() -> str:
     return resources.files("upnext.adapters.outbound.store").joinpath(SCHEMA_RESOURCE).read_text(encoding="utf-8")
 
 
-def connect(db_path: Path | str) -> sqlite3.Connection:
+def connect(db_path: Path | str, *, same_thread_only: bool = True) -> sqlite3.Connection:
     """Open the library, creating the file and the schema if either is missing.
 
     ":memory:" is passed through untouched so tests can hold a whole library in
     RAM without a temporary directory.
+
+    `same_thread_only=False` is for the HTTP layer and nothing else. FastAPI
+    runs a sync dependency, the endpoint it feeds, and the dependency's teardown
+    on three separately borrowed threadpool threads, so a connection opened per
+    request is opened on one thread and used on another — which sqlite3 refuses
+    by default. The three run in sequence and never overlap, so what the guard
+    would be protecting against cannot happen; what it does instead is fail a
+    request whenever the pool happens to hand out a different thread, which is
+    most of them once a page asks for more than one endpoint at a time.
     """
     if db_path != ":memory:":
         path = Path(db_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         db_path = str(path)
 
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, check_same_thread=same_thread_only)
     conn.row_factory = sqlite3.Row
     # Foreign keys are off by default in SQLite and are per-connection, so the
     # ON DELETE CASCADE clauses in the schema are inert without this line.

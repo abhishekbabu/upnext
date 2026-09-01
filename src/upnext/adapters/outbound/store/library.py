@@ -554,6 +554,48 @@ class Library:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def airing_next(self, today: str, limit: int = 20) -> list[dict]:
+        """Episodes airing today or later, of shows with watch history, soonest first.
+
+        A schedule rather than a backlog, which is why it is a separate query
+        from `up_next`: that one answers "what do I put on now" and is ordered
+        by what was watched most recently, this one answers "what is coming"
+        and is ordered by the calendar.
+
+        "Shows I have seen" is watch history rather than `status`, because
+        status does not survive contact with a real library — a show whose new
+        season is a month out is usually filed `stopped` or `completed`, having
+        been finished, and a `watching` one is by definition already airing or
+        already over. History is the fact; the status is an opinion about it.
+
+        `today` is the caller's, not `date('now')`: a query that reads the
+        clock cannot be tested against a fixed calendar, and the boundary this
+        draws — an episode airing today is upcoming, yesterday's is not — is
+        exactly the thing worth pinning.
+        """
+        rows = self.conn.execute(
+            """
+            SELECT t.id AS title_id, t.name, t.kind, t.poster_path, t.year,
+                   e.id AS episode_id, e.season_number, e.episode_number, e.name AS episode_name,
+                   e.air_date, e.still_path,
+                   (SELECT MAX(w2.watched_at) FROM watches w2 WHERE w2.title_id = t.id) AS last_watched_at
+            FROM titles t
+            JOIN episodes e ON e.title_id = t.id
+            -- Air dates are stored as the catalog wrote them, always YYYY-MM-DD,
+            -- so lexicographic order is chronological order. A null air date is
+            -- an episode TMDB has not scheduled, and never compares true here.
+            WHERE e.air_date >= ?
+              -- Season 0 is specials at every source, and never the next thing
+              -- to watch — the same rule the shelf above this one follows.
+              AND e.season_number > 0
+              AND EXISTS (SELECT 1 FROM watches w WHERE w.title_id = t.id)
+            ORDER BY e.air_date, t.name, e.season_number, e.episode_number
+            LIMIT ?
+            """,
+            (today, limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
     def stats(self) -> dict:
         totals = self.conn.execute(
             """

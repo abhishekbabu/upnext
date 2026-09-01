@@ -14,10 +14,11 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -134,6 +135,28 @@ class UpNextItem(BaseModel):
     last_watched_at: str | None = None
 
 
+class AiringItem(BaseModel):
+    """One episode airing today or later, of a show with watch history.
+
+    Same shape as `UpNextItem` and deliberately a separate model: they answer
+    different questions, and `air_date` is the whole point here rather than an
+    incidental fact, so it is required.
+    """
+
+    title_id: int
+    name: str
+    kind: Kind
+    year: int | None = None
+    poster_path: str | None = None
+    episode_id: int
+    season_number: int
+    episode_number: int
+    episode_name: str | None = None
+    air_date: str
+    still_path: str | None = None
+    last_watched_at: str | None = None
+
+
 class Stats(BaseModel):
     watches: int
     episodes_watched: int
@@ -155,7 +178,13 @@ def get_library(settings: Annotated[Settings, Depends(get_settings)]) -> Iterato
     # safe to share across threads and FastAPI runs sync endpoints in a pool,
     # so a cached connection is not an option and a leaked one is a file handle
     # per request.
-    conn = connect(settings.db_path)
+    #
+    # `same_thread_only=False` because this request's three stages — building
+    # the dependency, running the endpoint, closing it again — are each handed
+    # a thread from that pool, and sqlite3's own check cannot tell them apart
+    # from genuine concurrent use. They run one after another; nothing here is
+    # shared with another request.
+    conn = connect(settings.db_path, same_thread_only=False)
     try:
         yield Library(conn)
     finally:
@@ -205,9 +234,41 @@ def up_next(library: LibraryDep, limit: Annotated[int, Query(ge=1, le=100)] = 20
     return [UpNextItem.model_validate(row) for row in library.up_next(limit=limit)]
 
 
+@app.get("/api/airing")
+def airing(library: LibraryDep, limit: Annotated[int, Query(ge=1, le=100)] = 20) -> list[AiringItem]:
+    # Today is decided here rather than in SQL so the query stays testable
+    # against a fixed calendar. UTC because that is what everything else in
+    # upnext compares in, and an air date carries no timezone of its own.
+    today = datetime.now(UTC).date().isoformat()
+    return [AiringItem.model_validate(row) for row in library.airing_next(today, limit=limit)]
+
+
 @app.get("/api/stats")
 def stats(library: LibraryDep) -> Stats:
     return Stats.model_validate(library.stats())
+
+
+# Everything Vite writes into assets/ carries a content hash in its filename, so
+# a changed file is a changed URL and the old one can be kept for good. The year
+# is the convention rather than a considered duration; `immutable` is the half
+# that matters, because it stops a reload revalidating what cannot have changed.
+IMMUTABLE = {"cache-control": "public, max-age=31536000, immutable"}
+
+# index.html is the opposite: its name never changes and its contents name this
+# build's bundle. Cached without this, a browser holds yesterday's index.html —
+# and with it yesterday's app — on a heuristic of its own choosing, and a
+# rebuild does not reach anyone who has visited before. `no-cache` still lets it
+# be stored and revalidated, which the ETag makes almost free.
+REVALIDATE = {"cache-control": "no-cache"}
+
+
+class ImmutableStatic(StaticFiles):
+    """`StaticFiles`, but saying how long a content-hashed asset keeps."""
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Response:
+        response = super().file_response(*args, **kwargs)
+        response.headers.update(IMMUTABLE)
+        return response
 
 
 def mount_web() -> None:
@@ -221,7 +282,7 @@ def mount_web() -> None:
         logger.info("web/dist not built; serving the API only. Run `just ui` to build and serve it.")
         return
 
-    app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
+    app.mount("/assets", ImmutableStatic(directory=DIST / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str) -> Any:
@@ -237,8 +298,8 @@ def mount_web() -> None:
             raise HTTPException(status_code=404, detail=f"Unknown endpoint '/{path}'.")
         candidate = DIST / path
         if path and candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(DIST / "index.html")
+            return FileResponse(candidate, headers=REVALIDATE)
+        return FileResponse(DIST / "index.html", headers=REVALIDATE)
 
 
 mount_web()

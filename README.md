@@ -9,6 +9,11 @@ is one SQLite file you own.
 
 ## Screens
 
+**Airing next** — below the shelf, what has not come out yet: upcoming episodes
+of shows you have watched, ordered by the calendar and grouped by day.
+
+![Airing next](docs/screenshots/airing.jpg)
+
 **Library** — everything you have watched or mean to, filterable by status and
 searchable by name. Light and dark are one class on `<html>`.
 
@@ -166,11 +171,21 @@ name search and a hope.
 | `GET /api/titles?status=&kind=` | the library, with counted progress per title |
 | `GET /api/titles/{id}` | one title, its episodes with watch counts, and any viewings TMDB cannot account for |
 | `GET /api/up-next` | the next unwatched episode of everything in progress |
+| `GET /api/airing` | episodes airing today or later, of shows with watch history, soonest first |
 | `GET /api/stats` | episodes, titles, date range, runtime, counts by status |
 | `GET /api/config` | the TMDB image base the client builds poster URLs from |
 
 "Next" is the lowest-numbered unwatched episode, not the highest watched plus
 one — the second definition silently swallows a gap when someone skips around.
+
+The two shelves answer different questions and neither is folded into the
+other: `up-next` is a backlog, ordered by what was watched most recently, and
+`airing` is a schedule, ordered by the calendar. `airing` selects on watch
+history rather than status, because a show whose new season is a month out has
+usually been finished and filed `completed` or `stopped` — filtering on
+`watching` would empty the list of exactly what it exists to surface. It is
+only ever as current as the last `upnext enrich`, which is what wrote the
+episode list it reads.
 
 ## The front end
 
