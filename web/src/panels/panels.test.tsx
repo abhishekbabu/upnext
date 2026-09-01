@@ -148,9 +148,7 @@ describe("UpNext", () => {
     expect(screen.getByText("Riches of Embarrassment")).toBeTruthy();
   });
 
-  it("collapses a whole season landing at once into one row", async () => {
-    // Eight rows of the same name is a wall, and it buries every other show
-    // that week underneath it. The row still says which episodes arrived.
+  it("lists every episode of a season that lands at once", async () => {
     const sameDay: AiringItem[] = [1, 2, 3].map((n) => ({
       ...LASSO,
       episode_id: 950 + n,
@@ -161,9 +159,11 @@ describe("UpNext", () => {
     stubFetch({ "/api/config": CONFIG, "/api/up-next": [NEXT_UP], "/api/airing": sameDay });
     draw(<UpNext />);
 
-    expect(await screen.findByText("S04E01-E03")).toBeTruthy();
-    expect(screen.getByText("3 episodes")).toBeTruthy();
-    expect(screen.getAllByText("Ted Lasso")).toHaveLength(1);
+    // One day, three rows — not one row claiming three episodes.
+    expect(await screen.findByText("S04E01")).toBeTruthy();
+    expect(screen.getByText("S04E03")).toBeTruthy();
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
+    expect(screen.getAllByText("Ted Lasso")).toHaveLength(3);
   });
 
   it("leaves the calendar out entirely when nothing is scheduled", async () => {

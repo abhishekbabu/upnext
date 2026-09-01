@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -248,6 +248,29 @@ def stats(library: LibraryDep) -> Stats:
     return Stats.model_validate(library.stats())
 
 
+# Everything Vite writes into assets/ carries a content hash in its filename, so
+# a changed file is a changed URL and the old one can be kept for good. The year
+# is the convention rather than a considered duration; `immutable` is the half
+# that matters, because it stops a reload revalidating what cannot have changed.
+IMMUTABLE = {"cache-control": "public, max-age=31536000, immutable"}
+
+# index.html is the opposite: its name never changes and its contents name this
+# build's bundle. Cached without this, a browser holds yesterday's index.html —
+# and with it yesterday's app — on a heuristic of its own choosing, and a
+# rebuild does not reach anyone who has visited before. `no-cache` still lets it
+# be stored and revalidated, which the ETag makes almost free.
+REVALIDATE = {"cache-control": "no-cache"}
+
+
+class ImmutableStatic(StaticFiles):
+    """`StaticFiles`, but saying how long a content-hashed asset keeps."""
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Response:
+        response = super().file_response(*args, **kwargs)
+        response.headers.update(IMMUTABLE)
+        return response
+
+
 def mount_web() -> None:
     """Serve the built front end, when there is one.
 
@@ -259,7 +282,7 @@ def mount_web() -> None:
         logger.info("web/dist not built; serving the API only. Run `just ui` to build and serve it.")
         return
 
-    app.mount("/assets", StaticFiles(directory=DIST / "assets"), name="assets")
+    app.mount("/assets", ImmutableStatic(directory=DIST / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str) -> Any:
@@ -275,8 +298,8 @@ def mount_web() -> None:
             raise HTTPException(status_code=404, detail=f"Unknown endpoint '/{path}'.")
         candidate = DIST / path
         if path and candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(DIST / "index.html")
+            return FileResponse(candidate, headers=REVALIDATE)
+        return FileResponse(DIST / "index.html", headers=REVALIDATE)
 
 
 mount_web()

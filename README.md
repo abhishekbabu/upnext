@@ -10,8 +10,7 @@ is one SQLite file you own.
 ## Screens
 
 **Airing next** — below the shelf, what has not come out yet: upcoming episodes
-of shows you have watched, ordered by the calendar and grouped by day. A whole
-season landing at once is one row rather than eight.
+of shows you have watched, ordered by the calendar and grouped by day.
 
 ![Airing next](docs/screenshots/airing.jpg)
 

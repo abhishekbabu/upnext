@@ -114,6 +114,31 @@ def test_an_unknown_api_path_is_a_404_even_with_a_build_present(tmp_path: Path, 
         assert "upnext" in spa.get("/library").text
 
 
+def test_the_page_revalidates_and_its_hashed_assets_do_not(tmp_path: Path, monkeypatch) -> None:
+    """A rebuilt front end has to reach a browser that has been here before.
+
+    index.html keeps its name and names this build's bundle, so a browser left
+    to its own heuristics serves a cached one and with it yesterday's app —
+    which is what made a rebuild need a hard reload to show up. Everything under
+    assets/ is the opposite: Vite puts a content hash in the filename, so the
+    URL changes whenever the bytes do and the old one can be kept for good.
+    """
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><title>upnext</title>", encoding="utf-8")
+    (dist / "assets" / "index-abc123.js").write_text("console.log(1)", encoding="utf-8")
+
+    app = FastAPI()
+    monkeypatch.setattr(web_api, "app", app)
+    monkeypatch.setattr(web_api, "DIST", dist)
+    web_api.mount_web()
+
+    with TestClient(app) as client:
+        assert client.get("/").headers["cache-control"] == "no-cache"
+        assert client.get("/library").headers["cache-control"] == "no-cache"
+        assert "immutable" in client.get("/assets/index-abc123.js").headers["cache-control"]
+
+
 def test_without_a_build_the_api_still_serves(tmp_path: Path, monkeypatch) -> None:
     """A fresh clone has no web/dist, and `upnext serve` must still work."""
     app = FastAPI()
