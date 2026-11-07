@@ -16,7 +16,7 @@ def _isolate_from_local_env(request, monkeypatch, tmp_path_factory):
     """Keep the suite off this machine's key and library.
 
     `settings.py` finds `.env` by absolute path on purpose, so that `upnext`
-    works from any directory — which also means a test calling `load_settings()`
+    works from any directory — which also means a test constructing `Settings()`
     would read the real key off a developer's disk and nothing off CI's. The
     same test would then pass here and fail there, or worse, quietly reach TMDB.
 

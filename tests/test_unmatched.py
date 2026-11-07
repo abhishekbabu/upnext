@@ -447,6 +447,20 @@ def test_a_season_moves_to_the_title_the_catalog_keeps_it_under(library: Library
     assert library.stats().watches == 3
 
 
+def test_a_moved_season_stays_moved_when_the_export_is_imported_again(library: Library) -> None:
+    """The export still files Bly Manor under The Haunting, every time."""
+    title_id = a_show(library, "The Haunting")
+    bly = Watch(watched_at="2020-10-01 00:00:00", episode=(2, 1), source="tvtime", source_episode_id="e1")
+    library.record_watch(title_id, bly)
+    catalog = one_show("The Haunting of Bly Manor", 109958, [(1, 1)])
+    move_season(catalog, library, source=library.title(title_id), tmdb_id=109958, season=2, as_season=1)
+
+    library.record_watch(title_id, bly)
+
+    assert library.stats().watches == 1
+    assert library.title(title_id).unmatched_watched == 0
+
+
 def test_a_moved_season_is_renumbered_into_the_target(library: Library) -> None:
     """Whose Line's revival is seasons 9-12 at the export and 1-4 at TMDB."""
     title_id = a_show(library, "Whose Line Is It Anyway? (US)")

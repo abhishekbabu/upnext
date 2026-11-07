@@ -14,7 +14,7 @@ const NAV = [
 ];
 
 /**
- * One layout for every page. The rail and the panel read the same address, so
+ * One layout for every page. The header and the panel read the same address, so
  * routing swaps the panel rather than re-rendering the shell around it.
  */
 export default function App() {

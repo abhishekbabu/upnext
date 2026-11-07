@@ -94,7 +94,7 @@ class Fails {
 function stubFetch(routes: Record<string, unknown>) {
   vi.stubGlobal("fetch", (input: string) => {
     const path = new URL(input, "http://localhost").pathname;
-    const body = path === "/api/config" ? CONFIG : routes[path];
+    const body = routes[path] ?? (path === "/api/config" ? CONFIG : undefined);
     if (body === undefined) throw new Error(`No stub for ${path}`);
     if (body instanceof Fails) {
       return Promise.resolve({
@@ -133,7 +133,7 @@ let client: QueryClient;
 
 /** An absent section proves nothing until the request behind it has settled. */
 async function settled(key: string) {
-  await waitFor(() => expect(client.getQueryState([key])?.status).not.toBe("pending"));
+  await waitFor(() => expect(client.getQueryState([key])?.status).toMatch(/^(success|error)$/));
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -216,6 +216,16 @@ describe("UpNext", () => {
 
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", expect.stringContaining("locked"));
   });
+
+  it("shows the status line, not a list, when validation fails", async () => {
+    // FastAPI's 422 carries `detail` as a list of objects.
+    stubFetch({ "/api/up-next": new Fails({ detail: [{ msg: "bad" }] }), "/api/airing": NOTHING_AIRING });
+    draw(<UpNext />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("500 Internal Server Error");
+    expect(alert.textContent).not.toContain("[object Object]");
+  });
 });
 
 describe("Library", () => {
@@ -234,17 +244,25 @@ describe("Library", () => {
     stubFetch({ "/api/titles": [UNENRICHED] });
     draw(<Library />);
 
-    expect(await screen.findByText("3 watched")).toBeTruthy();
+    expect(await screen.findByText("3 watched · not enriched")).toBeTruthy();
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
-  it("shows a full bar and the episodes TMDB does not list, together", async () => {
-    // Friends: 228 of TMDB's 228, plus the eight finales TheTVDB splits in two.
-    stubFetch({ "/api/titles": [{ ...FRIENDS, unmatched_watched: 8 }] });
+  it("never draws one episode short as finished", async () => {
+    stubFetch({ "/api/titles": [{ ...FRIENDS, episodes_watched: 227 }] });
     draw(<Library />);
 
-    expect(await screen.findByText("228 / 228")).toBeTruthy();
-    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("100");
+    const bar = await screen.findByRole("progressbar", { name: "Friends" });
+    expect(bar.getAttribute("aria-valuenow")).toBe("99");
+    expect(bar.firstElementChild?.className).not.toContain("bg-ok");
+  });
+
+  it("says which statuses have nothing, rather than suggesting an import", async () => {
+    stubFetch({ "/api/titles": [] });
+    draw(<Library />, "/library?status=stopped");
+
+    expect(await screen.findByText("Nothing marked stopped")).toBeTruthy();
+    expect(screen.queryByText(/just import/)).toBeNull();
   });
 
   it("draws no bar for a show whose numbering TMDB does not share", async () => {
@@ -257,6 +275,15 @@ describe("Library", () => {
 
     expect(await screen.findByText("320 watched")).toBeTruthy();
     expect(screen.queryByRole("progressbar")).toBeNull();
+  });
+
+  it("falls back to initials when the artwork CDN cannot be found", async () => {
+    stubFetch({ "/api/titles": [FRIENDS], "/api/config": new Fails() });
+    draw(<Library />);
+
+    await screen.findByText("Friends");
+    await settled("config");
+    expect(screen.getByText("F")).toBeTruthy();
   });
 
   it("falls back to initials when a title has no poster", async () => {
@@ -336,7 +363,7 @@ describe("Title", () => {
   it("does not call viewings TMDB was never asked about a disagreement", async () => {
     drawTitle({ ...DETAIL, enriched_at: null, total_episodes: null, episodes: [] });
 
-    await screen.findByText(/no episode count to measure against/);
+    await screen.findByText(/Run `just enrich` to match them/);
     expect(screen.queryByText("Also watched")).toBeNull();
   });
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -24,6 +25,15 @@ class Status(StrEnum):
     WATCHLIST = "watchlist"
     COMPLETED = "completed"
     STOPPED = "stopped"
+
+
+def in_status_order(counts: Mapping[Status, int]) -> dict[Status, int]:
+    """Counts by status, in `Status` order, with empty statuses left out.
+
+    By the enum rather than by count, so two runs over the same library list
+    their statuses in the same order.
+    """
+    return {status: counts[status] for status in Status if counts.get(status)}
 
 
 @dataclass(slots=True)

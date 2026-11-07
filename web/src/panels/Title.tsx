@@ -57,11 +57,16 @@ export function Title() {
           <div className="mt-5 max-w-sm">
             {progress.kind === "measured" && (
               <>
-                <ProgressBar value={progress.share} />
+                <ProgressBar value={progress.share} label={data.name} />
                 <p className="mt-1.5 font-mono text-[11px] text-muted-foreground">
                   {progress.watched} of {progress.total} episodes
                 </p>
               </>
+            )}
+            {progress.kind === "unenriched" && (
+              <p className="font-mono text-[11px] text-muted-foreground">
+                {progress.watched} episodes watched. Run `just enrich` to match them to TMDB&rsquo;s list.
+              </p>
             )}
             {progress.kind === "counted" && (
               <p className="font-mono text-[11px] text-muted-foreground">
@@ -86,9 +91,7 @@ export function Title() {
         </div>
       </div>
 
-      {/* Before enrichment every viewing is unmatched because TMDB has not been
-          asked, which is the opposite of TMDB numbering the show differently. */}
-      {data.enriched_at && data.unmatched.length > 0 && <Unmatched viewings={data.unmatched} />}
+      {progress.kind !== "unenriched" && data.unmatched.length > 0 && <Unmatched viewings={data.unmatched} />}
 
       <div className="mt-10">
         {seasons.length === 0 ? (
@@ -178,7 +181,7 @@ function Unmatched({ viewings }: { viewings: UnmatchedViewing[] }) {
         // A show numbered wholly differently leaves hundreds of these, and an
         // unbroken wall of them buries the episode list underneath. Folded, so
         // the count leads and the detail is one click away rather than gone.
-        <details className="mt-3 group">
+        <details className="mt-3">
           <summary className="cursor-pointer text-[13px] text-muted-foreground marker:text-muted-foreground hover:text-foreground">
             Show all {viewings.length}
           </summary>
@@ -191,7 +194,7 @@ function Unmatched({ viewings }: { viewings: UnmatchedViewing[] }) {
   );
 }
 
-/** Beyond this many, the list folds. Eight reads at a glance; three hundred does not. */
+/** Beyond this many, the list folds. Two dozen read at a glance; three hundred do not. */
 const INLINE_LIMIT = 24;
 
 function Chips({ viewings }: { viewings: UnmatchedViewing[] }) {

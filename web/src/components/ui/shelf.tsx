@@ -22,7 +22,7 @@ export function ShelfCard({
     <li>
       <Link
         to={`/titles/${titleId}`}
-        className="group block rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+        className="group block rounded-md focus-visible:outline-offset-4"
       >
         <Poster name={name} path={posterPath} className="transition-opacity group-hover:opacity-85" />
         <p className="mt-2.5 truncate text-[13.5px] font-medium leading-snug" title={name}>

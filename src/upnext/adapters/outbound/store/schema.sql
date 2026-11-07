@@ -95,8 +95,13 @@ CREATE TABLE IF NOT EXISTS watches (
 -- They cannot collapse into one constraint: a source can stamp two distinct
 -- episodes with the same season/episode numbers and the same second, and a
 -- single constraint rejects the second as a duplicate.
-CREATE UNIQUE INDEX IF NOT EXISTS watches_source_episode
-    ON watches (title_id, source, source_episode_id, watched_at)
+--
+-- The first leaves out title_id: the source's id names the episode wherever
+-- `upnext move` has since filed it, so a re-import after a move finds the
+-- viewing instead of recording it again under the title it came from.
+DROP INDEX IF EXISTS watches_source_episode;
+CREATE UNIQUE INDEX IF NOT EXISTS watches_source_viewing
+    ON watches (source, source_episode_id, watched_at)
     WHERE source_episode_id IS NOT NULL;
 
 -- On the source's own numbering rather than episode_id, because episode_id is

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -151,8 +152,7 @@ def test_airing_lists_only_future_episodes_of_watched_shows(airing_api: TestClie
 
 def test_airing_says_which_day_it_counted_from(airing_api: TestClient) -> None:
     """The client labels "Today" and "Tomorrow" against this, not its own clock."""
-    today = airing_api.get("/api/airing").json()["today"]
-    assert len(today) == 10 and today[4] == today[7] == "-"
+    assert airing_api.get("/api/airing").json()["today"] == datetime.now(UTC).date().isoformat()
 
 
 def test_airing_takes_a_limit(airing_api: TestClient) -> None:

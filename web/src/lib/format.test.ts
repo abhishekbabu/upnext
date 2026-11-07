@@ -57,10 +57,10 @@ describe("progressOf", () => {
     });
   });
 
-  it("counts, rather than measures, a title TMDB has not been asked about", () => {
+  it("tells a title TMDB has not been asked about apart from one it disagrees with", () => {
     // Unenriched: everything is unmatched only because there is nothing to
     // match against. Reporting that as a disagreement would be a lie.
-    expect(progressOf(title(0, 12, null, null))).toEqual({ kind: "counted", watched: 12 });
+    expect(progressOf(title(0, 12, null, null))).toEqual({ kind: "unenriched", watched: 12 });
   });
 
   it("never adds matched and unmatched together when TMDB gives no total", () => {
@@ -112,7 +112,7 @@ describe("shortDate", () => {
 
 describe("hours", () => {
   it("groups thousands", () => {
-    expect(hours(150_540)).toBe("2,509 hours");
+    expect(hours(150_540, "en-US")).toBe("2,509 hours");
   });
 
   it("says nothing below an hour", () => {

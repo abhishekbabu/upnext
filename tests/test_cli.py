@@ -220,7 +220,6 @@ def a_haunting_library(db: Path) -> int:
 
 
 def test_move_sends_a_season_to_the_title_it_belongs_to(tmp_path: Path, monkeypatch, capsys) -> None:
-    monkeypatch.setenv("UPNEXT_TMDB_API_KEY", "key")
     db = tmp_path / "library.db"
     title_id = a_haunting_library(db)
 
@@ -242,7 +241,6 @@ def test_move_sends_a_season_to_the_title_it_belongs_to(tmp_path: Path, monkeypa
 
 
 def test_move_reports_what_the_target_could_not_place(tmp_path: Path, monkeypatch, capsys) -> None:
-    monkeypatch.setenv("UPNEXT_TMDB_API_KEY", "key")
     db = tmp_path / "library.db"
     title_id = a_haunting_library(db)
 

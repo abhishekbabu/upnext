@@ -39,11 +39,16 @@ export function episodeCode(season: number, episode: number): string {
  * and the two do not always divide a show the same way. A viewing TMDB's list
  * has no episode for is still a viewing — it just cannot be a percentage.
  *
- * So this returns which of four things is true, and the panels render each.
+ * So this returns which of five things is true, and the panels render each.
  */
 export type Progress =
   /** Nothing watched, nothing to measure. */
   | { kind: "none" }
+  /**
+   * TMDB has not been asked yet, so every viewing is unmatched for want of a
+   * list. The opposite statement to `unmatched`, and never drawn like it.
+   */
+  | { kind: "unenriched"; watched: number }
   /** Watched, with no catalog total to measure against. */
   | { kind: "counted"; watched: number }
   /** Matched to TMDB's list, so a bar means what it looks like. */
@@ -60,10 +65,9 @@ export function progressOf(
 ): Progress {
   const { episodes_watched: watched, unmatched_watched: unmatched, total_episodes: total } = title;
 
-  // Before enrichment nothing has been matched because nothing has been asked,
-  // so every viewing is unmatched and a count is all there is to say. After it,
-  // the two counts are different statements and are never added together.
-  if (!title.enriched_at) return unmatched > 0 ? { kind: "counted", watched: unmatched } : { kind: "none" };
+  // After enrichment the two counts are different statements and are never
+  // added together.
+  if (!title.enriched_at) return unmatched > 0 ? { kind: "unenriched", watched: unmatched } : { kind: "none" };
   if (watched === 0 && unmatched > 0) return { kind: "unmatched", unmatched, total };
   if (!total) return watched > 0 ? { kind: "counted", watched } : { kind: "none" };
 
@@ -137,11 +141,16 @@ function utcDate(value: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/** "4,240", grouped however the reader's locale groups digits. */
+export function count(n: number, locale?: string): string {
+  return n.toLocaleString(locale);
+}
+
 /** "2,509 hours", or "" below an hour — a floor is not worth a rounding argument. */
-export function hours(minutes: number): string {
+export function hours(minutes: number, locale?: string): string {
   const total = Math.floor(minutes / 60);
   if (total < 1) return "";
-  return `${total.toLocaleString()} ${total === 1 ? "hour" : "hours"}`;
+  return `${count(total, locale)} ${total === 1 ? "hour" : "hours"}`;
 }
 
 /** Up to two initials from a title: "The Last of Us" -> "LU". */

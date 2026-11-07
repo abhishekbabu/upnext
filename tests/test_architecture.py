@@ -56,15 +56,8 @@ def test_a_module_imports_only_from_the_layers_below_it(module: Path) -> None:
     assert not forbidden, f"{module.relative_to(SRC)} is in {layer!r} and may not import {sorted(forbidden)}"
 
 
-def test_the_domain_depends_on_nothing_else_in_the_package() -> None:
-    """The arrow that matters most: everything points at the domain, never out."""
-    for module in modules():
-        if layer_of(module) == "domain":
-            assert upnext_imports(module) <= {"domain"}, module
-
-
 def test_only_inbound_adapters_write_to_a_stream() -> None:
-    """`print` and `sys.exit` outside inbound take down a request mid-flight."""
+    """`print` outside inbound writes over the CLI's output or into a server log nobody reads."""
     offenders = []
     for module in modules():
         relative = module.relative_to(SRC)

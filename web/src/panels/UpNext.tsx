@@ -94,7 +94,7 @@ function Airing() {
                 <li key={episode.episode_id}>
                   <Link
                     to={`/titles/${episode.title_id}`}
-                    className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-secondary focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                    className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-secondary focus-visible:-outline-offset-2"
                   >
                     <Poster name={episode.name} path={episode.poster_path} size="w154" className="w-9 shrink-0 rounded-sm" />
                     <span className="min-w-0 flex-1">

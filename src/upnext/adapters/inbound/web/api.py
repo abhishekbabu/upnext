@@ -212,12 +212,12 @@ def get_title(title_id: int, library: LibraryDep) -> TitleDetail:
 
 
 @app.get("/api/up-next")
-def up_next(library: LibraryDep, limit: Limit = 24) -> list[UpNextItem]:
+def up_next(library: LibraryDep, limit: Limit = 100) -> list[UpNextItem]:
     return [UpNextItem.model_validate(row, from_attributes=True) for row in library.up_next(limit)]
 
 
 @app.get("/api/airing")
-def airing(library: LibraryDep, limit: Limit = 24) -> Airing:
+def airing(library: LibraryDep, limit: Limit = 100) -> Airing:
     # UTC because that is what everything else in upnext compares in, and an
     # air date carries no timezone of its own.
     today = datetime.now(UTC).date().isoformat()
