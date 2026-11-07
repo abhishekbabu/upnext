@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Path as PathParam
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
@@ -197,7 +198,7 @@ def list_titles(library: LibraryDep, status: Annotated[Status | None, Query()] =
 
 
 @app.get("/api/titles/{title_id}")
-def get_title(title_id: int, library: LibraryDep) -> TitleDetail:
+def get_title(title_id: Annotated[int, PathParam(gt=0, lt=2**63)], library: LibraryDep) -> TitleDetail:
     title = library.title(title_id)
     if title is None:
         raise HTTPException(status_code=404, detail="No such title")

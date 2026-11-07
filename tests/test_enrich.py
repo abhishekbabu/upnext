@@ -102,5 +102,5 @@ def test_a_second_title_resolving_to_a_held_catalog_id_fails_alone(library: Libr
     result = enrich(catalog, library, [first, second])
 
     assert result.matched == ["Friends"]
-    ((name, why),) = result.failed
-    assert name == "Friends (Reunion)" and "upnext move" in why
+    assert result.failed == []
+    assert result.duplicates == [("Friends (Reunion)", "TMDB 1668 is already 'Friends'")]

@@ -1,5 +1,5 @@
 import { Fragment, useMemo } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Check, ChevronLeft } from "lucide-react";
 import { StatusBadge } from "@/components/ui/badge";
 import { Poster } from "@/components/ui/poster";
@@ -14,6 +14,9 @@ import { cn, groupBy } from "@/lib/utils";
 export function Title() {
   const { id } = useParams();
   const { data, isPending, error } = useTitle(Number(id));
+  const navigate = useNavigate();
+  // "default" is a page opened directly, with nowhere in the app to go back to.
+  const cameFromApp = useLocation().key !== "default";
 
   const seasons = useMemo(() => bySeason(data?.episodes ?? []), [data]);
 
@@ -26,12 +29,18 @@ export function Title() {
 
   return (
     <>
+      {/* Back where they came from, filter and all; the Library otherwise. */}
       <Link
         to="/library"
+        onClick={(event) => {
+          if (!cameFromApp) return;
+          event.preventDefault();
+          navigate(-1);
+        }}
         className="mb-5 inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="size-4" aria-hidden />
-        Library
+        {cameFromApp ? "Back" : "Library"}
       </Link>
 
       <div className="flex flex-col gap-6 sm:flex-row sm:gap-8">

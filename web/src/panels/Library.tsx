@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { StatusBadge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 export function Library() {
   const [params, setParams] = useSearchParams();
   const status = asStatus(params.get("status"));
-  const [search, setSearch] = useState("");
+  const search = params.get("q") ?? "";
 
   const { data, isPending, error } = useTitles(status);
 
@@ -29,18 +29,18 @@ export function Library() {
       <PageHeader title="Library" detail="Everything upnext knows you have watched, or mean to." />
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
-        <FilterTab active={!status} onClick={() => setStatus(setParams, null)}>
+        <FilterTab active={!status} onClick={() => setParam(setParams, "status", null)}>
           All
         </FilterTab>
         {STATUSES.map((value) => (
-          <FilterTab key={value} active={status === value} onClick={() => setStatus(setParams, value)}>
+          <FilterTab key={value} active={status === value} onClick={() => setParam(setParams, "status", value)}>
             {STATUS_LABELS[value]}
           </FilterTab>
         ))}
         <input
           type="search"
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => setParam(setParams, "q", event.target.value)}
           placeholder="Filter by name"
           aria-label="Filter by name"
           className={cn(
@@ -143,6 +143,15 @@ function asStatus(value: string | null): Status | undefined {
   return STATUSES.includes(value as Status) ? (value as Status) : undefined;
 }
 
-function setStatus(setParams: ReturnType<typeof useSearchParams>[1], status: Status | null) {
-  setParams(status ? { status } : {}, { replace: true });
+/** One parameter changed, the others kept; replaced, so typing is not history. */
+function setParam(setParams: ReturnType<typeof useSearchParams>[1], key: "status" | "q", value: string | null) {
+  setParams(
+    (current) => {
+      const next = new URLSearchParams(current);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      return next;
+    },
+    { replace: true },
+  );
 }

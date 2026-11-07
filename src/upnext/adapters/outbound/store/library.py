@@ -332,7 +332,7 @@ class Library:
     def episodes(self, title_id: int) -> list[EpisodeRow]:
         rows = self.conn.execute(
             """
-            SELECT e.*, COUNT(w.id) AS watch_count, MAX(w.watched_at) AS last_watched_at
+            SELECT e.*, COUNT(w.id) AS watch_count
             FROM episodes e
             LEFT JOIN watches w ON w.episode_id = e.id
             WHERE e.title_id = ?

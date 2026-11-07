@@ -5,8 +5,25 @@
  * the same thing share one fetch and one cache entry.
  */
 
-import { useQuery } from "@tanstack/react-query";
+import { QueryClient, useQuery } from "@tanstack/react-query";
 import { api, type Status } from "@/lib/api";
+
+/** The cache policy the app runs under, and the one its tests render with. */
+export function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        // The library is a local SQLite file that only changes when the user
+        // runs a command, so refetching because a window regained focus buys
+        // nothing.
+        refetchOnWindowFocus: false,
+        staleTime: 60_000,
+        // A failure here is the server's answer, not a blip; it is shown at once.
+        retry: false,
+      },
+    },
+  });
+}
 
 export function useConfig() {
   return useQuery({

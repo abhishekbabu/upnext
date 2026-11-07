@@ -12,6 +12,7 @@ export function Stats() {
   if (isPending) return <Loading />;
 
   const runtime = hours(data.known_minutes);
+  const statuses = STATUSES.filter((status) => data.by_status[status]);
 
   return (
     <>
@@ -31,15 +32,19 @@ export function Stats() {
         </p>
       )}
 
-      <h2 className="eyebrow mb-3 mt-10">By status</h2>
-      <dl className="grid max-w-md gap-px overflow-hidden rounded-md border border-border bg-border">
-        {STATUSES.filter((status) => data.by_status[status]).map((status) => (
-          <div key={status} className="flex items-baseline justify-between bg-card px-3.5 py-2.5">
-            <dt className="text-[13.5px]">{STATUS_LABELS[status]}</dt>
-            <dd className="font-mono text-[13px]">{data.by_status[status]}</dd>
-          </div>
-        ))}
-      </dl>
+      {statuses.length > 0 && (
+        <>
+          <h2 className="eyebrow mb-3 mt-10">By status</h2>
+          <dl className="grid max-w-md gap-px overflow-hidden rounded-md border border-border bg-border">
+            {statuses.map((status) => (
+              <div key={status} className="flex items-baseline justify-between bg-card px-3.5 py-2.5">
+                <dt className="text-[13.5px]">{STATUS_LABELS[status]}</dt>
+                <dd className="font-mono text-[13px]">{data.by_status[status]}</dd>
+              </div>
+            ))}
+          </dl>
+        </>
+      )}
     </>
   );
 }

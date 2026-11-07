@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     """Everything upnext needs to run, with working defaults for all of it.
 
     Only the TMDB key has no default: import and browsing work without it, and
-    enrichment is the one command that fails loudly when it is missing.
+    the commands that ask TMDB — `enrich` and `move` — fail loudly when it is
+    missing.
     """
 
     model_config = SettingsConfigDict(

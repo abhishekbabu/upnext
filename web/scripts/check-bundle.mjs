@@ -6,7 +6,7 @@
  * thing and brings a library with it — invisible in review, and months later
  * "the app got slow".
  *
- * Raise BUDGET deliberately, with the reason in the commit.
+ * Raise BUDGET_KB deliberately, with the reason in the commit.
  */
 import { gzipSync } from "node:zlib";
 import { readFile, readdir } from "node:fs/promises";
@@ -32,6 +32,6 @@ console.log(`  entry ${gzipped.toFixed(1)} kB gzip (budget ${BUDGET_KB})`);
 
 if (gzipped > BUDGET_KB) {
   console.error(`\n  Over budget by ${(gzipped - BUDGET_KB).toFixed(1)} kB.`);
-  console.error("  Either defer it behind a dynamic import, or raise BUDGET with the reason.");
+  console.error("  Either defer it behind a dynamic import, or raise BUDGET_KB with the reason.");
   process.exit(1);
 }

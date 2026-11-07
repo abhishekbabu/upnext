@@ -270,3 +270,21 @@ def test_enrich_refuses_a_limit_of_nothing(tmp_path: Path) -> None:
     """`--limit 0` once meant no limit at all."""
     with pytest.raises(SystemExit):
         cli.main(["--db", str(tmp_path / "l.db"), "enrich", "--limit", "0"])
+
+
+def test_a_library_path_that_is_not_a_library_fails_cleanly(tmp_path: Path, capsys) -> None:
+    not_sqlite = tmp_path / "notes.txt"
+    not_sqlite.write_text("not a database " * 100, encoding="utf-8")
+    assert cli.main(["--db", str(not_sqlite), "stats"]) == 2
+    assert "cannot be opened as a library" in capsys.readouterr().err
+
+
+def test_a_malformed_setting_is_named_rather_than_dumped(monkeypatch, capsys) -> None:
+    monkeypatch.setenv("UPNEXT_PORT", "eighty")
+    assert cli.main(["stats"]) == 2
+    assert "UPNEXT_PORT" in capsys.readouterr().err
+
+
+def test_a_title_id_sqlite_cannot_hold_is_rejected(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["--db", str(tmp_path / "l.db"), "move", "--title", str(2**64), "--season", "1", "--to", "1"])

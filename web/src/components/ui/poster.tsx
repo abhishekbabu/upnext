@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { initials, poster, type PosterSize } from "@/lib/format";
 import { useConfig } from "@/lib/queries";
@@ -23,7 +24,10 @@ export function Poster({
   className?: string;
 }) {
   const { data: config, isPending } = useConfig();
-  const src = config ? poster(config.image_base, path, size) : null;
+  const url = config ? poster(config.image_base, path, size) : null;
+  // A path TMDB no longer serves falls back to initials, not a broken image.
+  const [failed, setFailed] = useState<string | null>(null);
+  const src = url !== failed ? url : null;
   // Until the artwork CDN is known, a poster that has a path is a blank frame
   // rather than initials, which would flash and then be replaced. If it cannot
   // be known, initials.
@@ -45,6 +49,7 @@ export function Poster({
           alt=""
           loading="lazy"
           decoding="async"
+          onError={() => setFailed(src)}
           className="size-full object-cover"
         />
       ) : waiting ? null : (
