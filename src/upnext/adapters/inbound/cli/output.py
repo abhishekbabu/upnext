@@ -12,7 +12,7 @@ from pathlib import Path
 
 from upnext.application.enrichment import EnrichmentResult, MoveResult
 from upnext.application.importing import ImportSummary
-from upnext.domain.models import TitleRow
+from upnext.domain.models import LibraryStats, Status, TitleRow
 
 
 def error(message: str) -> None:
@@ -21,8 +21,7 @@ def error(message: str) -> None:
 
 def imported(summary: ImportSummary, db_path: Path) -> None:
     print(f"Imported {summary.titles} titles and {summary.watches} watches into {db_path}")
-    for status, count in summary.by_status.items():
-        print(f"  {status.value:<10} {count}")
+    _by_status(summary.by_status)
     print("\nNext: `upnext enrich` to resolve these against TMDB.")
 
 
@@ -53,6 +52,10 @@ def enrichment_done(result: EnrichmentResult) -> None:
         print("Not found on TMDB (left as imported):")
         for name in result.unmatched:
             print(f"  - {name}")
+    if result.failed:
+        print("TMDB could not serve these (left as imported, and tried again next run):")
+        for name, reason in result.failed:
+            print(f"  - {name}: {reason}")
 
 
 def moved(source_name: str, season: int, result: MoveResult) -> None:
@@ -75,12 +78,15 @@ def relinked(linked: int, unmatched: list[TitleRow]) -> None:
         print(f"  {row.name[:38]:<38} {row.episodes_watched}/{row.total_episodes or '?'}  +{row.unmatched_watched}")
 
 
-def stats(summary: dict) -> None:
-    print(f"{summary['episodes_watched']} episodes across {summary['titles_watched']} titles")
-    if summary["first_watch"]:
-        print(f"from {summary['first_watch'][:10]} to {summary['last_watch'][:10]}")
-    hours = summary["known_minutes"] // 60
-    if hours:
+def stats(summary: LibraryStats) -> None:
+    print(f"{summary.episodes_watched} episodes across {summary.titles_watched} titles")
+    if summary.first_watch and summary.last_watch:
+        print(f"from {summary.first_watch[:10]} to {summary.last_watch[:10]}")
+    if hours := summary.known_minutes // 60:
         print(f"at least {hours:,} hours of known runtime")
-    for status, count in summary["by_status"].items():
+    _by_status(summary.by_status)
+
+
+def _by_status(counts: dict[Status, int]) -> None:
+    for status, count in counts.items():
         print(f"  {status:<10} {count}")

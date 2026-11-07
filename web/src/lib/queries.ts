@@ -26,12 +26,12 @@ export function useTitle(id: number) {
   return useQuery({ queryKey: ["title", id], queryFn: () => api.title(id) });
 }
 
-export function useUpNext(limit = 24) {
-  return useQuery({ queryKey: ["up-next", limit], queryFn: () => api.upNext(limit) });
+export function useUpNext() {
+  return useQuery({ queryKey: ["up-next"], queryFn: api.upNext });
 }
 
-export function useAiring(limit = 24) {
-  return useQuery({ queryKey: ["airing", limit], queryFn: () => api.airing(limit) });
+export function useAiring() {
+  return useQuery({ queryKey: ["airing"], queryFn: api.airing });
 }
 
 export function useStats() {

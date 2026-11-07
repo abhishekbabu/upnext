@@ -1,10 +1,8 @@
 -- upnext's local library.
 --
--- One `titles` table covers shows and films, keyed by `kind`. A watch of a
--- film is a row with a null episode_id; a watch of a show is a row that points
--- at one episode.
-
-PRAGMA foreign_keys = ON;
+-- One `titles` table covers shows and films, keyed by `kind`. `episodes` is the
+-- catalog's list; `watches` is the viewing history in the exporting service's
+-- own numbering, matched to an episode once enrichment has a list to match.
 
 CREATE TABLE IF NOT EXISTS titles (
     id             INTEGER PRIMARY KEY,
@@ -55,7 +53,6 @@ CREATE TABLE IF NOT EXISTS episodes (
     still_path     TEXT,
 
     tmdb_id        INTEGER,
-    tvdb_id        INTEGER,
 
     UNIQUE (title_id, season_number, episode_number)
 );

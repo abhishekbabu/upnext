@@ -28,12 +28,16 @@ class ExportError(UpnextError):
 
 
 class CatalogError(UpnextError):
-    """The catalog refused a request in a way that retrying will not fix."""
+    """The catalog could not answer for one title."""
 
 
-class RetryableCatalogError(UpnextError):
+class NotFoundError(UpnextError):
+    """Something was asked for by an id the library does not have."""
+
+
+class RetryableCatalogError(CatalogError):
     """A timeout, a connection failure or a 5xx — worth another attempt.
 
-    Never escapes an adapter: the retry policy that catches it lives there, and
-    what reaches the application is either a result or a `CatalogError`.
+    The adapter retries it. Once the attempts run out it reaches the caller
+    as what it is — a `CatalogError` — so the application needs no case for it.
     """

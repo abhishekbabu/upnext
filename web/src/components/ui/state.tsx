@@ -1,6 +1,5 @@
-import { Loader2 } from "lucide-react";
+import { SHELF_GRID } from "@/components/ui/shelf";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 
 /**
  * The three things every panel does while it has nothing to show.
@@ -14,7 +13,7 @@ import { cn } from "@/lib/utils";
 export function Loading({ shape = "rows" }: { shape?: "rows" | "shelf" }) {
   return (
     <div
-      className={cn(shape === "shelf" ? "grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-5" : "flex flex-col gap-3")}
+      className={shape === "shelf" ? SHELF_GRID : "flex flex-col gap-3"}
       // Announced politely: a screen reader should hear that something is
       // coming, not have the page read out again as rows arrive.
       role="status"
@@ -35,23 +34,12 @@ export function Loading({ shape = "rows" }: { shape?: "rows" | "shelf" }) {
   );
 }
 
-/** For work someone started, where a placeholder would look like a mistake. */
-export function Working({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-2.5 py-6 text-[13.5px] text-muted-foreground" role="status" aria-live="polite">
-      <Loader2 className="size-4 animate-spin" aria-hidden />
-      {label}
-    </div>
-  );
-}
-
 /** Nothing to show, said once and in the same shape every time. */
-export function Empty({ title, detail, action }: { title: string; detail?: string; action?: React.ReactNode }) {
+export function Empty({ title, detail }: { title: string; detail?: string }) {
   return (
     <div className="flex flex-col items-start gap-3 py-14 text-left">
       <p className="font-display text-[17px] font-semibold tracking-tight">{title}</p>
       {detail && <p className="max-w-[60ch] text-[13.5px] leading-relaxed text-muted-foreground">{detail}</p>}
-      {action}
     </div>
   );
 }

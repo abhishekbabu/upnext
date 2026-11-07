@@ -24,7 +24,8 @@ inward of `adapters/` may import outward of it — if a use case needs something
 an adapter has, name it as a port.
 
 ```
-domain/       models.py, errors.py, ports.py   — the vocabulary and the interfaces
+domain/       models.py, errors.py, ports.py,  — the vocabulary, the interfaces,
+              matching.py                        and the rules for joining the two lists
 application/  enrichment.py, importing.py      — use cases, ports-only collaborators
 adapters/inbound/    cli/, web/                — the only place that prints or exits
 adapters/outbound/   catalog/, importers/, store/
@@ -50,10 +51,10 @@ an `UpnextError` subclass from `domain/errors.py`; an empty list is a valid
 *answer*, a failed request is not. Never `print` or `sys.exit` outside
 `adapters/inbound/`. `raise ... from e` when re-raising.
 
-`RetryableCatalogError` never escapes an adapter — the retry policy that catches
-it lives there, and what reaches the application is a result or a `CatalogError`.
-`ConfigurationError` is separate from both because it is answerable: the message
-says what to put where, and retrying never substitutes for it.
+`RetryableCatalogError` is a `CatalogError` subclass the adapter retries first;
+once the attempts run out, the application handles it like any other. `ConfigurationError`
+is separate because it is answerable — a missing key, or one TMDB rejects (401) —
+and ends an enrichment run rather than failing every title the same way.
 
 **Dates and times.** Aware UTC for anything persisted or compared — never naive
 `datetime.now()`. Timestamps from a source are stored as the source wrote them,
@@ -75,8 +76,9 @@ A row invented from a watch is a claim about a show's structure made by
 something that is not the source of truth for it, and it inflates every count
 measured against the list.
 
-**Matching is exact on episode number, never approximate.** A near miss written
-into `episodes` is a guess in the one table that must not contain any. Two
+**Matching is exact on episode number, never approximate.** The rules are pure
+functions in `domain/matching.py`; the store only loads and writes. A near miss
+written into `episodes` is a guess in the one table that must not contain any. Two
 shape disagreements are resolvable, and both must stay evidence-led: a season
 number at or above `SEASON_IS_A_YEAR` is a year and resolves by the catalog's
 air dates; a source that split a run the catalog keeps flat maps ordinally, but
@@ -97,11 +99,12 @@ history, not `status` — a show returning after a break is filed `completed` or
 `today` as an argument rather than reading the clock, so the boundary it draws
 can be tested.
 
-**The web layer's connections cross threads.** `connect(..., same_thread_only=
-False)` in `get_library`, and nowhere else. FastAPI hands the dependency, the
-endpoint and the teardown three separately borrowed threadpool threads; they run
-in sequence and never overlap, so sqlite3's own check only produces intermittent
-500s. `TestClient` drives the app from one thread and will not reproduce it.
+**The web layer's connections cross threads.** `open_library(...,
+same_thread_only=False)` in `get_library`, and nowhere else. FastAPI hands the
+dependency, the endpoint and the teardown three separately borrowed threadpool
+threads; they run in sequence and never overlap, so sqlite3's own check only
+produces intermittent 500s. `TestClient` drives the app from one thread and will
+not reproduce it.
 
 **Progress and history are different counts.** `episodes_watched` is what the
 catalog's list contains and pairs with `total_episodes`; `unmatched_watched` is
@@ -149,10 +152,11 @@ not `bg-neutral-50`. A raw utility cannot follow a mode change, and eslint
 rejects one. Light and dark are one class on `<html>`; the tokens resolve
 through `light-dark()` and no JavaScript recolors anything.
 
-**The API client is the contract.** `web/src/lib/api.ts` mirrors the wire models
-in `adapters/inbound/web/api.py`. Change one and change the other in the same
-commit — a field read here that the server stopped sending is a typecheck
-failure, which is the point.
+**The API client is generated.** The wire models in `adapters/inbound/web/api.py`
+are the contract; `just api-types` writes `web/openapi.json` and
+`web/src/lib/schema.d.ts` from them, and commits carry both. A test fails if
+either is stale, so a field the server stops sending is a typecheck failure in
+the panel that reads it. Never hand-edit either file.
 
 **Formatting lives in `lib/format.ts`** and is pure and tested. A panel that
 formats a date or an episode code itself will drift from the one beside it.

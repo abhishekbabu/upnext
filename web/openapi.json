@@ -1,0 +1,850 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "upnext",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/config": {
+      "get": {
+        "summary": "Config",
+        "operationId": "config_api_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/titles": {
+      "get": {
+        "summary": "List Titles",
+        "operationId": "list_titles_api_titles_get",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Status"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TitleSummary"
+                  },
+                  "title": "Response List Titles Api Titles Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/titles/{title_id}": {
+      "get": {
+        "summary": "Get Title",
+        "operationId": "get_title_api_titles__title_id__get",
+        "parameters": [
+          {
+            "name": "title_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Title Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TitleDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/up-next": {
+      "get": {
+        "summary": "Up Next",
+        "operationId": "up_next_api_up_next_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 24,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UpNextItem"
+                  },
+                  "title": "Response Up Next Api Up Next Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/airing": {
+      "get": {
+        "summary": "Airing",
+        "operationId": "airing_api_airing_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 24,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Airing"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/stats": {
+      "get": {
+        "summary": "Stats",
+        "operationId": "stats_api_stats_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stats"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Airing": {
+        "properties": {
+          "today": {
+            "type": "string",
+            "title": "Today",
+            "description": "The day the list starts at, in UTC. Sent rather than left to the client,\nwhich would otherwise have to agree with the server about when today is."
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/AiringItem"
+            },
+            "type": "array",
+            "title": "Episodes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "today",
+          "episodes"
+        ],
+        "title": "Airing"
+      },
+      "AiringItem": {
+        "properties": {
+          "title_id": {
+            "type": "integer",
+            "title": "Title Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "poster_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Path"
+          },
+          "episode_id": {
+            "type": "integer",
+            "title": "Episode Id"
+          },
+          "season_number": {
+            "type": "integer",
+            "title": "Season Number"
+          },
+          "episode_number": {
+            "type": "integer",
+            "title": "Episode Number"
+          },
+          "episode_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Name"
+          },
+          "air_date": {
+            "type": "string",
+            "title": "Air Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title_id",
+          "name",
+          "poster_path",
+          "episode_id",
+          "season_number",
+          "episode_number",
+          "episode_name",
+          "air_date"
+        ],
+        "title": "AiringItem",
+        "description": "One episode airing today or later, of a show with watch history."
+      },
+      "Config": {
+        "properties": {
+          "image_base": {
+            "type": "string",
+            "title": "Image Base",
+            "description": "TMDB's artwork CDN. The library stores paths, so the client joins this to\na `poster_path` with the size it wants \u2014 a render-time decision, and\ntherefore the client's."
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_base"
+        ],
+        "title": "Config",
+        "description": "What the client needs to know about this installation to render at all."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Stats": {
+        "properties": {
+          "watches": {
+            "type": "integer",
+            "title": "Watches"
+          },
+          "episodes_watched": {
+            "type": "integer",
+            "title": "Episodes Watched"
+          },
+          "titles_watched": {
+            "type": "integer",
+            "title": "Titles Watched"
+          },
+          "first_watch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Watch"
+          },
+          "last_watch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Watch"
+          },
+          "known_minutes": {
+            "type": "integer",
+            "title": "Known Minutes",
+            "description": "A floor, not a total: only enriched episodes carry a runtime."
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/Status"
+            },
+            "type": "object",
+            "title": "By Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "watches",
+          "episodes_watched",
+          "titles_watched",
+          "first_watch",
+          "last_watch",
+          "known_minutes",
+          "by_status"
+        ],
+        "title": "Stats"
+      },
+      "Status": {
+        "type": "string",
+        "enum": [
+          "watching",
+          "watchlist",
+          "completed",
+          "stopped"
+        ],
+        "title": "Status",
+        "description": "Where a title sits for the user.\n\nDeliberately four buckets and no \"unwatched\": a title with no relationship\nto the user has no state row at all. Declared in the order a library is\nread \u2014 what you are on, then the rest \u2014 which is the order every count of\nthem is listed in."
+      },
+      "TitleDetail": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "poster_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Path"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Status"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total_episodes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Episodes",
+            "description": "What the catalog says the whole run is, specials excluded."
+          },
+          "episodes_watched": {
+            "type": "integer",
+            "title": "Episodes Watched",
+            "description": "Distinct episodes watched that TMDB's list contains, specials excluded.\nThe figure `total_episodes` is comparable to."
+          },
+          "unmatched_watched": {
+            "type": "integer",
+            "title": "Unmatched Watched",
+            "description": "Distinct episodes watched that TMDB's list does not contain, counted by\nwhat the export called them. Real viewings of something TMDB numbers\ndifferently \u2014 the two together are the whole history."
+          },
+          "enriched_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enriched At",
+            "description": "Null until TMDB has answered for this title, which is what tells \"TMDB\ndoes not list these\" apart from \"there is no list yet\"."
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "air_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Status",
+            "description": "The show's own status at TMDB (\"Ended\", \"Returning Series\"), not the user's."
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating",
+            "description": "Out of 10. A TV Time rating out of 5 is doubled on import."
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/TitleEpisode"
+            },
+            "type": "array",
+            "title": "Episodes",
+            "default": []
+          },
+          "unmatched": {
+            "items": {
+              "$ref": "#/components/schemas/UnmatchedViewing"
+            },
+            "type": "array",
+            "title": "Unmatched",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "year",
+          "poster_path",
+          "status",
+          "total_episodes",
+          "episodes_watched",
+          "unmatched_watched",
+          "enriched_at",
+          "overview",
+          "air_status",
+          "rating"
+        ],
+        "title": "TitleDetail"
+      },
+      "TitleEpisode": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "season_number": {
+            "type": "integer",
+            "title": "Season Number"
+          },
+          "episode_number": {
+            "type": "integer",
+            "title": "Episode Number"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "air_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Date"
+          },
+          "watch_count": {
+            "type": "integer",
+            "title": "Watch Count",
+            "description": "Viewings, so a rewatch is 2 rather than collapsing into \"seen\"."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "season_number",
+          "episode_number",
+          "name",
+          "air_date",
+          "watch_count"
+        ],
+        "title": "TitleEpisode"
+      },
+      "TitleSummary": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "poster_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Path"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Status"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total_episodes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Episodes",
+            "description": "What the catalog says the whole run is, specials excluded."
+          },
+          "episodes_watched": {
+            "type": "integer",
+            "title": "Episodes Watched",
+            "description": "Distinct episodes watched that TMDB's list contains, specials excluded.\nThe figure `total_episodes` is comparable to."
+          },
+          "unmatched_watched": {
+            "type": "integer",
+            "title": "Unmatched Watched",
+            "description": "Distinct episodes watched that TMDB's list does not contain, counted by\nwhat the export called them. Real viewings of something TMDB numbers\ndifferently \u2014 the two together are the whole history."
+          },
+          "enriched_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enriched At",
+            "description": "Null until TMDB has answered for this title, which is what tells \"TMDB\ndoes not list these\" apart from \"there is no list yet\"."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "year",
+          "poster_path",
+          "status",
+          "total_episodes",
+          "episodes_watched",
+          "unmatched_watched",
+          "enriched_at"
+        ],
+        "title": "TitleSummary",
+        "description": "A title as a shelf sees it: enough for a poster and its progress."
+      },
+      "UnmatchedViewing": {
+        "properties": {
+          "season_number": {
+            "type": "integer",
+            "title": "Season Number"
+          },
+          "episode_number": {
+            "type": "integer",
+            "title": "Episode Number"
+          },
+          "watch_count": {
+            "type": "integer",
+            "title": "Watch Count"
+          },
+          "last_watched_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Watched At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "season_number",
+          "episode_number",
+          "watch_count",
+          "last_watched_at"
+        ],
+        "title": "UnmatchedViewing",
+        "description": "Viewings of an episode TMDB's list does not contain, in the export's numbering.\n\nRendered apart from the episode list rather than mixed into it: they are\nnot episodes of this show as TMDB understands it."
+      },
+      "UpNextItem": {
+        "properties": {
+          "title_id": {
+            "type": "integer",
+            "title": "Title Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "poster_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Path"
+          },
+          "episode_id": {
+            "type": "integer",
+            "title": "Episode Id"
+          },
+          "season_number": {
+            "type": "integer",
+            "title": "Season Number"
+          },
+          "episode_number": {
+            "type": "integer",
+            "title": "Episode Number"
+          },
+          "episode_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Name"
+          },
+          "last_watched_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Watched At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title_id",
+          "name",
+          "poster_path",
+          "episode_id",
+          "season_number",
+          "episode_number",
+          "episode_name",
+          "last_watched_at"
+        ],
+        "title": "UpNextItem",
+        "description": "The next unwatched episode of one show in progress."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

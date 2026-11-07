@@ -7,26 +7,31 @@ catalog is TMDB or that the library is SQLite; `bootstrap` does the wiring.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from upnext.domain.errors import CatalogError
 from upnext.domain.models import Status, TitleRow, TitleState
-from upnext.domain.ports import Catalog, CatalogMatch, WatchLibrary
+from upnext.domain.ports import Catalog, CatalogShow, WatchLibrary
 
 
 @dataclass(slots=True)
 class EnrichmentResult:
-    matched: list[str]
-    unmatched: list[str]
+    matched: list[str] = field(default_factory=list)
+    unmatched: list[str] = field(default_factory=list)
+    """Titles the catalog has never heard of, left exactly as imported."""
+
+    failed: list[tuple[str, str]] = field(default_factory=list)
+    """Titles the catalog knew but could not serve, with why. Nothing was
+    stamped, so the next `enrich` tries them again."""
 
     @property
     def total(self) -> int:
-        return len(self.matched) + len(self.unmatched)
+        return len(self.matched) + len(self.unmatched) + len(self.failed)
 
 
-def resolve_show(catalog: Catalog, title: TitleRow) -> CatalogMatch | None:
-    """Find the catalog's show for an imported one.
+def resolve_show(catalog: Catalog, title: TitleRow) -> int | None:
+    """The catalog's id for an imported show, or None if it has none.
 
     The TheTVDB id is tried first because it is an identity rather than a
     guess. Name search is the fallback for shows the catalog has never mapped,
@@ -36,17 +41,21 @@ def resolve_show(catalog: Catalog, title: TitleRow) -> CatalogMatch | None:
     catalog does not know is not a disagreement, so it is allowed through.
     """
     if title.tmdb_id:
-        return CatalogMatch(catalog_id=title.tmdb_id, name=title.name, year=title.year)
-    if title.tvdb_id:
-        found = catalog.find_by_tvdb(title.tvdb_id)
-        if found:
-            return found
+        return title.tmdb_id
+    if title.tvdb_id and (found := catalog.find_by_tvdb(title.tvdb_id)):
+        return found.catalog_id
 
     for candidate in catalog.search_shows(title.name, year=title.year)[:1]:
         if title.year and candidate.year is not None and candidate.year != title.year:
             continue
-        return candidate
+        return candidate.catalog_id
     return None
+
+
+def _store_show(library: WatchLibrary, title_id: int, show: CatalogShow) -> None:
+    library.apply_enrichment(title_id, show.title, enriched_at=datetime.now(UTC).isoformat(timespec="seconds"))
+    for episode in show.episodes:
+        library.upsert_episode(title_id, episode)
 
 
 def enrich_title(catalog: Catalog, library: WatchLibrary, title: TitleRow) -> bool:
@@ -54,26 +63,15 @@ def enrich_title(catalog: Catalog, library: WatchLibrary, title: TitleRow) -> bo
 
     Committed per title: enrichment walks every season of every show in one
     run, and a failure at show 140 must not discard the 139 already resolved.
+    Matching runs on every enrichment, because a catalog that adds an episode
+    should pick up the viewings that were waiting for it.
     """
-    match = resolve_show(catalog, title)
-    if match is None:
+    catalog_id = resolve_show(catalog, title)
+    if catalog_id is None:
         return False
 
-    show = catalog.fetch_show(match.catalog_id)
-    library.apply_enrichment(
-        title.id,
-        show.title,
-        enriched_at=datetime.now(UTC).isoformat(timespec="seconds"),
-    )
-    for episode in show.episodes:
-        library.upsert_episode(title.id, episode)
-
-    # The episode list is the catalog's; the history was recorded in whatever
-    # the exporting service called things. This is where the two meet, and it
-    # runs on every enrichment because a catalog that adds an episode should
-    # pick up the viewings that were waiting for it.
+    _store_show(library, title.id, catalog.fetch_show(catalog_id))
     library.link_watches(title.id)
-
     library.commit()
     return True
 
@@ -87,17 +85,20 @@ def enrich(
 ) -> EnrichmentResult:
     """Enrich every title given, reporting each as it lands.
 
-    A catalog failure on one title counts as unmatched rather than ending the
-    run: the title keeps exactly what the import gave it and is picked up again
-    by the next `enrich`, because nothing stamped it as enriched.
+    A catalog failure on one title does not end the run: the title keeps
+    exactly what the import gave it and is picked up again by the next
+    `enrich`, because nothing stamped it as enriched. A `ConfigurationError`
+    does end it — no other title will fare better.
     """
-    result = EnrichmentResult(matched=[], unmatched=[])
+    result = EnrichmentResult()
     for title in titles:
         try:
             ok = enrich_title(catalog, library, title)
-        except CatalogError:
+        except CatalogError as exc:
+            result.failed.append((title.name, str(exc)))
             ok = False
-        (result.matched if ok else result.unmatched).append(title.name)
+        else:
+            (result.matched if ok else result.unmatched).append(title.name)
         if on_progress is not None:
             on_progress(title, ok)
     return result
@@ -164,10 +165,7 @@ def move_season(
         library.set_state(target_id, TitleState(status=source.status or Status.WATCHING))
     else:
         target_id = existing.id
-
-    library.apply_enrichment(target_id, show.title, enriched_at=datetime.now(UTC).isoformat(timespec="seconds"))
-    for episode in show.episodes:
-        library.upsert_episode(target_id, episode)
+    _store_show(library, target_id, show)
 
     moved = library.move_watches(source_id=source.id, target_id=target_id, season=season, as_season=as_season)
     linked = library.link_watches(target_id)

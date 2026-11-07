@@ -98,7 +98,7 @@ doctor:
 ui: web-build
     uv run upnext serve
 
-# API only, reloading on change. Pair with `just web` in a second terminal.
+# The API alone. Pair with `just web` in a second terminal.
 serve:
     uv run upnext serve
 
@@ -114,9 +114,15 @@ web-install:
 web-build: web-install
     cd web && pnpm build
 
+# Regenerate the client's API types from the server's wire models
+api-types:
+    uv run python -c "import json; from upnext.adapters.inbound.web.api import app; print(json.dumps(app.openapi(), indent=2))" > web/openapi.json
+    cd web && pnpm api-types
+
 # Lint, typecheck, test and build the front end — this is what CI runs
 check-web: web-install
     cd web && pnpm lint
+    cd web && pnpm api-types --check
     cd web && pnpm exec tsc -b
     cd web && pnpm test
     # Builds because the bundle budget is checked by the build and nothing

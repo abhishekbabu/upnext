@@ -17,8 +17,8 @@ def test_an_export_round_trips_into_the_library(library: Library, export_dir: Pa
     assert summary.titles == 5
     assert summary.watches == 4
     stats = library.stats()
-    assert stats["watches"] == 4
-    assert stats["by_status"] == {"watching": 1, "completed": 1, "stopped": 2, "watchlist": 1}
+    assert stats.watches == 4
+    assert stats.by_status == {Status.WATCHING: 1, Status.WATCHLIST: 1, Status.COMPLETED: 1, Status.STOPPED: 2}
 
 
 def test_importing_the_same_export_twice_converges(library: Library, export_dir: Path) -> None:
@@ -26,7 +26,7 @@ def test_importing_the_same_export_twice_converges(library: Library, export_dir:
     second = import_export(TVTimeExport(), library, export_dir)
 
     assert second.titles == 5
-    assert library.stats()["watches"] == 4
+    assert library.stats().watches == 4
     assert library.count_titles() == 5
 
 

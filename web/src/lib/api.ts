@@ -1,18 +1,28 @@
 /**
  * The API client.
  *
- * Types here mirror the wire models in `adapters/inbound/web/api.py`. They are
- * the contract in both directions: a field added there and not here is dead
- * weight, and a field read here that the server stopped sending is a typecheck
- * failure rather than an `undefined` halfway down a render.
+ * The types are generated: `adapters/inbound/web/api.py` is the contract,
+ * `just api-types` writes it to `openapi.json` and from there to `schema.d.ts`,
+ * and a test fails if either is stale. A field the server stops sending is a
+ * typecheck failure in the panel that reads it.
  */
 
-export type Kind = "show" | "movie";
-export type Status = "watching" | "completed" | "watchlist" | "stopped";
+import type { components } from "@/lib/schema";
 
-/** Every status, in the order a library is read: what you are on, then the rest. */
-export const STATUSES: Status[] = ["watching", "watchlist", "completed", "stopped"];
+type Schemas = components["schemas"];
 
+export type Status = Schemas["Status"];
+export type Config = Schemas["Config"];
+export type TitleSummary = Schemas["TitleSummary"];
+export type TitleDetail = Schemas["TitleDetail"];
+export type TitleEpisode = Schemas["TitleEpisode"];
+export type UnmatchedViewing = Schemas["UnmatchedViewing"];
+export type UpNextItem = Schemas["UpNextItem"];
+export type Airing = Schemas["Airing"];
+export type AiringItem = Schemas["AiringItem"];
+export type Stats = Schemas["Stats"];
+
+/** Every status, labelled, in the order a library is read: what you are on, then the rest. */
 export const STATUS_LABELS: Record<Status, string> = {
   watching: "Watching",
   watchlist: "Watchlist",
@@ -20,138 +30,10 @@ export const STATUS_LABELS: Record<Status, string> = {
   stopped: "Stopped",
 };
 
-/** What the client needs to know about this installation to render at all. */
-export type Config = {
-  /** TMDB's artwork CDN. Joined to a poster_path with the size we want. */
-  image_base: string;
-};
+export const STATUSES = Object.keys(STATUS_LABELS) as Status[];
 
-export type TitleSummary = {
-  id: number;
-  kind: Kind;
-  name: string;
-  year: number | null;
-  poster_path: string | null;
-  air_status: string | null;
-  /** What the catalog says the whole run is. Null for anything unenriched. */
-  total_episodes: number | null;
-  status: Status | null;
-  is_favorite: boolean;
-  /** Out of 10. upnext keeps a 10-point scale; TV Time rated out of 5. */
-  rating: number | null;
-  /**
-   * Distinct episodes watched that TMDB's list contains, specials excluded.
-   * The figure `total_episodes` is comparable to.
-   */
-  episodes_watched: number;
-  /**
-   * Distinct episodes watched that TMDB's list does not contain, counted by
-   * what the export called them. Real viewings of something TMDB numbers
-   * differently — a source that splits a double-length episode TMDB counts
-   * once, or numbers seasons by year against TMDB's 1..N.
-   */
-  unmatched_watched: number;
-  /** Null until TMDB has answered, which separates "not listed" from "not asked". */
-  enriched_at: string | null;
-  last_watched_at: string | null;
-};
-
-/** Viewings of an episode TMDB's list does not contain, in the export's numbering. */
-export type UnmatchedViewing = {
-  season_number: number;
-  episode_number: number;
-  watch_count: number;
-  last_watched_at: string | null;
-};
-
-export type EpisodeRow = {
-  id: number;
-  season_number: number;
-  episode_number: number;
-  name: string | null;
-  overview: string | null;
-  air_date: string | null;
-  runtime: number | null;
-  still_path: string | null;
-  /** Watches, so a rewatch shows as 2 rather than collapsing into "seen". */
-  watch_count: number;
-  last_watched_at: string | null;
-};
-
-export type TitleDetail = TitleSummary & {
-  overview: string | null;
-  backdrop_path: string | null;
-  first_air_date: string | null;
-  last_air_date: string | null;
-  runtime: number | null;
-  tmdb_id: number | null;
-  imdb_id: string | null;
-  episodes: EpisodeRow[];
-  unmatched: UnmatchedViewing[];
-};
-
-export type UpNextItem = {
-  title_id: number;
-  name: string;
-  kind: Kind;
-  year: number | null;
-  poster_path: string | null;
-  episode_id: number;
-  season_number: number;
-  episode_number: number;
-  episode_name: string | null;
-  air_date: string | null;
-  still_path: string | null;
-  last_watched_at: string | null;
-};
-
-/**
- * An episode airing today or later, of a show with watch history.
- *
- * Mirrors `UpNextItem` field for field and is deliberately its own type: that
- * one is a backlog and this one is a schedule, and `air_date` is non-null here
- * because it is what the list is ordered and grouped by.
- */
-export type AiringItem = {
-  title_id: number;
-  name: string;
-  kind: Kind;
-  year: number | null;
-  poster_path: string | null;
-  episode_id: number;
-  season_number: number;
-  episode_number: number;
-  episode_name: string | null;
-  air_date: string;
-  still_path: string | null;
-  last_watched_at: string | null;
-};
-
-export type Stats = {
-  watches: number;
-  episodes_watched: number;
-  titles_watched: number;
-  first_watch: string | null;
-  last_watch: string | null;
-  /** A floor, not a total: only enriched episodes carry a runtime. */
-  known_minutes: number;
-  by_status: Record<string, number>;
-};
-
-/**
- * A failure the server described in its own words, ready to show as-is.
- *
- * Carries the status so a 404 can read as "no such title" rather than as a
- * fault, without matching on the wording.
- */
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number = 0,
-  ) {
-    super(message);
-  }
-}
+/** A failure the server described in its own words, ready to show as-is. */
+export class ApiError extends Error {}
 
 async function request<T>(path: string): Promise<T> {
   let response: Response;
@@ -166,7 +48,7 @@ async function request<T>(path: string): Promise<T> {
     // FastAPI writes `detail` for every failure it raises deliberately;
     // anything without one is a genuine fault and gets the status line.
     const body = await response.json().catch(() => null);
-    throw new ApiError(body?.detail ?? `${response.status} ${response.statusText}`, response.status);
+    throw new ApiError(body?.detail ?? `${response.status} ${response.statusText}`);
   }
   return response.json() as Promise<T>;
 }
@@ -176,7 +58,7 @@ export const api = {
   titles: (status?: Status) =>
     request<TitleSummary[]>(status ? `/api/titles?status=${encodeURIComponent(status)}` : "/api/titles"),
   title: (id: number) => request<TitleDetail>(`/api/titles/${id}`),
-  upNext: (limit = 24) => request<UpNextItem[]>(`/api/up-next?limit=${limit}`),
-  airing: (limit = 24) => request<AiringItem[]>(`/api/airing?limit=${limit}`),
+  upNext: () => request<UpNextItem[]>("/api/up-next"),
+  airing: () => request<Airing>("/api/airing"),
   stats: () => request<Stats>("/api/stats"),
 };

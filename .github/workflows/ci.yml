@@ -91,6 +91,11 @@ jobs:
 
       - run: pnpm lint
 
+      # schema.d.ts is generated from openapi.json, which the Python suite
+      # holds to the API. Stale types would typecheck the panels against
+      # yesterday's wire models. `just api-types` regenerates both.
+      - run: pnpm api-types --check
+
       - run: pnpm exec tsc -b
 
       - run: pnpm test

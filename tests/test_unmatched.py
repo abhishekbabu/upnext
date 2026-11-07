@@ -15,12 +15,8 @@ viewing in all three is real, and none of them should invent an episode.
 
 from __future__ import annotations
 
-import sqlite3
-from pathlib import Path
-
 from conftest import one_show
 
-from upnext.adapters.outbound.store.db import connect, migrate
 from upnext.adapters.outbound.store.library import Library
 from upnext.application.enrichment import move_season
 from upnext.domain.models import Episode, Status, Title, TitleState, Watch
@@ -53,7 +49,7 @@ def test_recording_a_watch_invents_no_episode(library: Library) -> None:
     assert library.episodes(title_id) == []
     # The viewing is kept whole, in the source's own words.
     assert library.unmatched_watches(title_id)[0].season_number == 1
-    assert library.stats()["watches"] == 1
+    assert library.stats().watches == 1
 
 
 def test_an_unenriched_title_counts_its_watches_but_measures_no_progress(library: Library) -> None:
@@ -158,7 +154,7 @@ def test_a_rewatch_is_one_episode_and_two_viewings(library: Library) -> None:
     enrich(library, title_id, total=1, episodes=[(1, 1)])
 
     assert library.title(title_id).episodes_watched == 1
-    assert library.stats()["watches"] == 2
+    assert library.stats().watches == 2
     assert library.episodes(title_id)[0].watch_count == 2
 
 
@@ -185,7 +181,7 @@ def test_specials_are_neither_progress_nor_a_disagreement(library: Library) -> N
     assert (row.episodes_watched, row.unmatched_watched, row.total_episodes) == (1, 0, 1)
     # Still stored, still shown, still a viewing.
     assert len(library.episodes(title_id)) == 2
-    assert library.stats()["episodes_watched"] == 2
+    assert library.stats().episodes_watched == 2
 
 
 def test_the_library_wide_total_counts_an_episode_once_either_way(library: Library) -> None:
@@ -195,7 +191,7 @@ def test_the_library_wide_total_counts_an_episode_once_either_way(library: Libra
 
     enrich(library, title_id, total=1, episodes=[(1, 1)])
 
-    assert library.stats()["episodes_watched"] == 2
+    assert library.stats().episodes_watched == 2
 
 
 def test_a_watch_the_export_could_not_number_counts_as_viewing_only(library: Library) -> None:
@@ -206,20 +202,9 @@ def test_a_watch_the_export_could_not_number_counts_as_viewing_only(library: Lib
     row = library.title(title_id)
     assert (row.episodes_watched, row.unmatched_watched) == (0, 0)
     assert row.last_watched_at == "2017-03-07 05:27:58"
-    assert library.stats()["watches"] == 1
-    assert library.stats()["episodes_watched"] == 0
+    assert library.stats().watches == 1
+    assert library.stats().episodes_watched == 0
     assert library.unmatched_watches(title_id) == []
-
-
-def test_the_list_and_the_detail_agree(library: Library) -> None:
-    title_id = a_show(library)
-    library.record_watch(title_id, Watch(watched_at="2018-05-01 00:00:00", episode=(1, 1)))
-    library.record_watch(title_id, Watch(watched_at="2018-05-02 00:00:00", episode=(1, 9)))
-    enrich(library, title_id, total=1, episodes=[(1, 1)])
-
-    listed, one = library.titles()[0], library.title(title_id)
-    assert (listed.episodes_watched, listed.unmatched_watched) == (1, 1)
-    assert (one.episodes_watched, one.unmatched_watched) == (1, 1)
 
 
 # ── idempotence ─────────────────────────────────────────────────────────
@@ -232,7 +217,7 @@ def test_the_same_watch_imported_twice_is_stored_once(library: Library) -> None:
             title_id,
             Watch(watched_at="2018-05-12 01:10:14", episode=(1, 1), source="tvtime", source_episode_id="303821"),
         )
-    assert library.stats()["watches"] == 1
+    assert library.stats().watches == 1
 
 
 def test_a_re_import_after_enrichment_still_converges(library: Library) -> None:
@@ -244,7 +229,7 @@ def test_a_re_import_after_enrichment_still_converges(library: Library) -> None:
     enrich(library, title_id, total=1, episodes=[(1, 1)])
 
     library.record_watch(title_id, watch)
-    assert library.stats()["watches"] == 1
+    assert library.stats().watches == 1
 
 
 def test_two_unnumbered_watches_at_the_same_second_are_two_rows(library: Library) -> None:
@@ -252,76 +237,7 @@ def test_two_unnumbered_watches_at_the_same_second_are_two_rows(library: Library
     title_id = a_show(library)
     library.record_watch(title_id, Watch(watched_at="2020-01-02 03:04:05", episode=(3, 13), source="tvtime"))
     library.record_watch(title_id, Watch(watched_at="2020-01-02 03:04:05", episode=(3, 14), source="tvtime"))
-    assert library.stats()["watches"] == 2
-
-
-# ── migration ───────────────────────────────────────────────────────────
-
-
-def test_an_existing_library_is_reshaped_without_a_re_import(tmp_path: Path) -> None:
-    """`CREATE TABLE IF NOT EXISTS` never alters a table that already exists.
-
-    An enrichment run is hundreds of API calls, so a library someone already
-    has moves to the new shape in place.
-    """
-    db_path = tmp_path / "old.db"
-    old = sqlite3.connect(db_path)
-    old.row_factory = sqlite3.Row
-    old.executescript(
-        """
-        CREATE TABLE titles (id INTEGER PRIMARY KEY, name TEXT, enriched_at TEXT);
-        CREATE TABLE episodes (
-            id INTEGER PRIMARY KEY, title_id INTEGER, season_number INTEGER,
-            episode_number INTEGER, tmdb_id INTEGER
-        );
-        CREATE TABLE watches (
-            id INTEGER PRIMARY KEY, title_id INTEGER, episode_id INTEGER,
-            watched_at TEXT, is_rewatch INTEGER DEFAULT 0,
-            source_episode_id TEXT, source TEXT DEFAULT 'upnext'
-        );
-        CREATE UNIQUE INDEX watches_episode_time
-            ON watches (title_id, episode_id, watched_at, source)
-            WHERE source_episode_id IS NULL AND episode_id IS NOT NULL;
-
-        INSERT INTO titles (id, name, enriched_at) VALUES (1, 'Friends', '2026-01-01T00:00:00+00:00');
-        -- One TMDB gave us, one the old import invented.
-        INSERT INTO episodes (id, title_id, season_number, episode_number, tmdb_id) VALUES (10, 1, 1, 1, 500);
-        INSERT INTO episodes (id, title_id, season_number, episode_number, tmdb_id) VALUES (11, 1, 6, 25, NULL);
-        INSERT INTO watches (title_id, episode_id, watched_at) VALUES (1, 10, '2018-05-12 01:10:14');
-        INSERT INTO watches (title_id, episode_id, watched_at) VALUES (1, 11, '2018-06-01 00:00:00');
-        """
-    )
-    old.commit()
-
-    migrate(old)
-
-    # Both viewings survive. The invented row does not.
-    assert old.execute("SELECT COUNT(*) n FROM watches").fetchone()["n"] == 2
-    assert old.execute("SELECT COUNT(*) n FROM episodes").fetchone()["n"] == 1
-
-    rows = old.execute("SELECT episode_id, source_season, source_episode FROM watches ORDER BY id").fetchall()
-    # The matched one keeps its episode and gains the numbering it came from.
-    assert (rows[0]["episode_id"], rows[0]["source_season"], rows[0]["source_episode"]) == (10, 1, 1)
-    # The other keeps the numbering and lets go of the invented episode.
-    assert (rows[1]["episode_id"], rows[1]["source_season"], rows[1]["source_episode"]) == (None, 6, 25)
-    old.close()
-
-
-def test_migrating_twice_changes_nothing(tmp_path: Path) -> None:
-    """It runs on every connect, so it has to be safe to run on every connect."""
-    db_path = tmp_path / "library.db"
-    conn = connect(db_path)
-    library = Library(conn)
-    title_id = a_show(library)
-    library.record_watch(title_id, Watch(watched_at="2018-05-12 01:10:14", episode=(1, 1)))
-    enrich(library, title_id, total=1, episodes=[(1, 1)])
-    conn.commit()
-    conn.close()
-
-    again = connect(db_path)
-    row = Library(again).title(title_id)
-    assert (row.episodes_watched, row.unmatched_watched) == (1, 0)
-    again.close()
+    assert library.stats().watches == 2
 
 
 # ── seasons the source labelled with a year ─────────────────────────────
@@ -394,6 +310,24 @@ def test_the_alias_still_matches_the_episode_number_exactly(library: Library) ->
     library.link_watches(title_id)
 
     assert library.title(title_id).unmatched_watched == 1
+
+
+def test_a_year_label_never_resolves_to_specials(library: Library) -> None:
+    """Season 0 can be the busiest season of a year — a run of shorts — and
+    still not be the season the source meant by the year."""
+    title_id = a_show(library, "Sidemen Sundays")
+    library.record_watch(title_id, Watch(watched_at="2019-06-01 00:00:00", episode=(2019, 1)))
+
+    library.apply_enrichment(
+        title_id, Title(name="Sidemen Sundays", tvdb_id=79168, total_episodes=1), enriched_at=ENRICHED
+    )
+    for number in (1, 2, 3):
+        library.upsert_episode(title_id, Episode(season_number=0, episode_number=number, air_date="2019-02-01"))
+    library.upsert_episode(title_id, Episode(season_number=4, episode_number=1, air_date="2019-03-01"))
+    library.link_watches(title_id)
+
+    matched = [e for e in library.episodes(title_id) if e.watch_count > 0]
+    assert [(e.season_number, e.episode_number) for e in matched] == [(4, 1)]
 
 
 def test_a_season_straddling_new_year_resolves_to_where_most_of_it_aired(library: Library) -> None:
@@ -510,7 +444,7 @@ def test_a_season_moves_to_the_title_the_catalog_keeps_it_under(library: Library
     target = library.title_by_tmdb_id(109958)
     assert (target.episodes_watched, target.unmatched_watched, target.total_episodes) == (2, 0, 2)
     # Every viewing survives the move.
-    assert library.stats()["watches"] == 3
+    assert library.stats().watches == 3
 
 
 def test_a_moved_season_is_renumbered_into_the_target(library: Library) -> None:

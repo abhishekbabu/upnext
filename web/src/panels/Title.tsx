@@ -5,21 +5,20 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Poster } from "@/components/ui/poster";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Empty, Failed, Loading } from "@/components/ui/state";
-import type { EpisodeRow, UnmatchedViewing } from "@/lib/api";
+import type { TitleEpisode, UnmatchedViewing } from "@/lib/api";
 import { episodeCode, progressOf, shortDate } from "@/lib/format";
-import { useConfig, useTitle } from "@/lib/queries";
-import { cn } from "@/lib/utils";
+import { useTitle } from "@/lib/queries";
+import { cn, groupBy } from "@/lib/utils";
 
 /** One title: its artwork and facts, every episode by season, and what TMDB missed. */
 export function Title() {
   const { id } = useParams();
-  const config = useConfig();
   const { data, isPending, error } = useTitle(Number(id));
 
   const seasons = useMemo(() => bySeason(data?.episodes ?? []), [data]);
 
   if (error) return <Failed error={error} />;
-  if (isPending || config.isPending) return <Loading />;
+  if (isPending) return <Loading />;
 
   const progress = progressOf(data);
   const specials = data.episodes.filter((episode) => episode.season_number === 0);
@@ -37,7 +36,7 @@ export function Title() {
 
       <div className="flex flex-col gap-6 sm:flex-row sm:gap-8">
         <div className="w-40 shrink-0">
-          <Poster name={data.name} path={data.poster_path} base={config.data?.image_base ?? ""} size="w342" />
+          <Poster name={data.name} path={data.poster_path} />
         </div>
 
         <div className="min-w-0 flex-1">
@@ -66,12 +65,13 @@ export function Title() {
             )}
             {progress.kind === "counted" && (
               <p className="font-mono text-[11px] text-muted-foreground">
-                {progress.watched} episodes watched — not enriched yet, so there is nothing to measure against
+                {progress.watched} episodes watched, with no episode count to measure against
               </p>
             )}
             {progress.kind === "unmatched" && (
               <p className="font-mono text-[11px] text-muted-foreground">
-                {progress.unmatched} episodes watched, none of them on TMDB&rsquo;s {progress.total}-episode list
+                {progress.unmatched} episodes watched, none of them on TMDB&rsquo;s
+                {progress.total ? ` ${progress.total}-episode` : ""} list
               </p>
             )}
             {/* Specials are excluded from TMDB's episode count, so they are
@@ -86,7 +86,9 @@ export function Title() {
         </div>
       </div>
 
-      {data.unmatched.length > 0 && <Unmatched viewings={data.unmatched} />}
+      {/* Before enrichment every viewing is unmatched because TMDB has not been
+          asked, which is the opposite of TMDB numbering the show differently. */}
+      {data.enriched_at && data.unmatched.length > 0 && <Unmatched viewings={data.unmatched} />}
 
       <div className="mt-10">
         {seasons.length === 0 ? (
@@ -95,13 +97,13 @@ export function Title() {
             detail={
               data.enriched_at
                 ? "TMDB has no episodes for this title. Everything you watched is still recorded above."
-                : "Run `upnext enrich` to fetch this show's episodes from TMDB."
+                : "Run `just enrich` to fetch this show's episodes from TMDB."
             }
           />
         ) : (
           seasons.map(([season, episodes]) => (
             <Fragment key={season}>
-              <h2 className="mb-2 mt-7 font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground first:mt-0">
+              <h2 className="eyebrow mb-2 mt-7 first:mt-0">
                 {season === 0 ? "Specials" : `Season ${season}`}
               </h2>
               <ul className="divide-y divide-border rounded-md border border-border">
@@ -126,8 +128,6 @@ export function Title() {
                       {episode.watch_count > 0 && (
                         <span className="inline-flex items-center gap-1 font-mono text-[10.5px] text-ok">
                           <Check className="size-3.5" aria-hidden />
-                          {/* A rewatch is a fact worth keeping: the count shows
-                              only above one, so an ordinary watch stays a tick. */}
                           {episode.watch_count > 1 ? `×${episode.watch_count}` : ""}
                           <span className="sr-only">
                             watched {episode.watch_count} {episode.watch_count === 1 ? "time" : "times"}
@@ -165,9 +165,7 @@ function Unmatched({ viewings }: { viewings: UnmatchedViewing[] }) {
 
   return (
     <section className="mt-10 rounded-md border border-border bg-card p-4">
-      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-        Also watched
-      </h2>
+      <h2 className="eyebrow">Also watched</h2>
       <p className="mt-1.5 max-w-[70ch] text-[13px] leading-relaxed text-muted-foreground">
         {viewings.length} {viewings.length === 1 ? "episode" : "episodes"}
         {total > viewings.length && ` (${total} viewings)`} outside TMDB&rsquo;s episode list, which numbers this show
@@ -222,14 +220,8 @@ function Chips({ viewings }: { viewings: UnmatchedViewing[] }) {
  * front, because a list that opens with specials buries the first real episode
  * of the show under them.
  */
-function bySeason(episodes: EpisodeRow[]): [number, EpisodeRow[]][] {
-  const groups = new Map<number, EpisodeRow[]>();
-  for (const episode of episodes) {
-    const group = groups.get(episode.season_number);
-    if (group) group.push(episode);
-    else groups.set(episode.season_number, [episode]);
-  }
-  return [...groups.entries()].sort(([a], [b]) => {
+function bySeason(episodes: TitleEpisode[]): [number, TitleEpisode[]][] {
+  return groupBy(episodes, (episode) => episode.season_number).sort(([a], [b]) => {
     if (a === 0) return 1;
     if (b === 0) return -1;
     return a - b;

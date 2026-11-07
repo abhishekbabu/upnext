@@ -44,30 +44,28 @@ export function episodeCode(season: number, episode: number): string {
 export type Progress =
   /** Nothing watched, nothing to measure. */
   | { kind: "none" }
-  /** Watched, but no catalog total — the title has not been enriched yet. */
+  /** Watched, with no catalog total to measure against. */
   | { kind: "counted"; watched: number }
   /** Matched to TMDB's list, so a bar means what it looks like. */
   | { kind: "measured"; watched: number; total: number; share: number; unmatched: number }
   /**
-   * TMDB has a list and not one viewing is on it. A 0% bar beside 320 watched
-   * episodes would be true and would read as "not started", so there is none:
-   * the counts say it better.
+   * TMDB has answered and not one viewing is on its list. A 0% bar beside 320
+   * watched episodes would be true and would read as "not started", so there
+   * is none: the counts say it better.
    */
-  | { kind: "unmatched"; unmatched: number; total: number };
+  | { kind: "unmatched"; unmatched: number; total: number | null };
 
 export function progressOf(
-  title: Pick<TitleSummary, "episodes_watched" | "unmatched_watched" | "total_episodes">,
+  title: Pick<TitleSummary, "episodes_watched" | "unmatched_watched" | "total_episodes" | "enriched_at">,
 ): Progress {
   const { episodes_watched: watched, unmatched_watched: unmatched, total_episodes: total } = title;
 
-  // Checked first, so an unenriched title — where everything is unmatched only
-  // because there is nothing to match against — reads as a plain count.
-  if (!total || total <= 0) {
-    const all = watched + unmatched;
-    return all > 0 ? { kind: "counted", watched: all } : { kind: "none" };
-  }
-
+  // Before enrichment nothing has been matched because nothing has been asked,
+  // so every viewing is unmatched and a count is all there is to say. After it,
+  // the two counts are different statements and are never added together.
+  if (!title.enriched_at) return unmatched > 0 ? { kind: "counted", watched: unmatched } : { kind: "none" };
   if (watched === 0 && unmatched > 0) return { kind: "unmatched", unmatched, total };
+  if (!total) return watched > 0 ? { kind: "counted", watched } : { kind: "none" };
 
   // Clamped: TMDB revises episode counts downward as contributors edit, and a
   // list that shrinks below what was matched against it should read as done.
@@ -146,7 +144,22 @@ export function hours(minutes: number): string {
   return `${total.toLocaleString()} ${total === 1 ? "hour" : "hours"}`;
 }
 
-/** The name with its year, the way a library lists it: "The Flash (2014)". */
-export function titleWithYear(name: string, year: number | null): string {
-  return year ? `${name} (${year})` : name;
+/** Up to two initials from a title: "The Last of Us" -> "LU". */
+export function initials(name: string): string {
+  const words = name
+    // Apostrophes come out before anything else splits on punctuation, so a
+    // possessive stays one word: "Aegon's Conquest" is AC, not AS.
+    .replace(/['\u2018\u2019]/g, "")
+    .replace(/[^\p{L}\p{N} ]/gu, " ")
+    .split(" ")
+    .filter((word) => word && !STOP_WORDS.has(word.toLowerCase()));
+  if (words.length === 0) return name.slice(0, 1).toUpperCase() || "?";
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]!.toUpperCase())
+    .join("");
 }
+
+// Dropped so "The Office" reads as "O" rather than "TO", which would collide
+// with half a shelf.
+const STOP_WORDS = new Set(["the", "a", "an", "of", "and"]);
