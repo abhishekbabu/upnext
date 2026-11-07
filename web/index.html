@@ -14,16 +14,14 @@
     <script>
       // Runs before first paint so the page never shows a light frame on its
       // way to dark. Reads the same key useTheme writes; a stored mode wins
-      // over the OS, and anything unreadable falls back to the OS rather than
-      // throwing.
+      // over the OS, and storage that cannot be read falls back to the OS.
       (function () {
+        var mode = null;
         try {
-          var mode = localStorage.getItem("upnext:mode");
-          var dark = mode ? mode === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-          document.documentElement.classList.toggle("dark", dark);
-        } catch (e) {
-          /* storage blocked; light, the default, stands */
-        }
+          mode = localStorage.getItem("upnext:mode");
+        } catch (e) {}
+        var dark = mode ? mode === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.classList.toggle("dark", dark);
       })();
     </script>
   </head>

@@ -31,6 +31,18 @@ class CatalogError(UpnextError):
     """The catalog could not answer for one title."""
 
 
+class LibraryError(UpnextError):
+    """The library file cannot be opened as one: a directory, or not SQLite."""
+
+
+class DuplicateTitleError(UpnextError):
+    """Two titles in the library are one title at the catalog.
+
+    Not a catalog failure: nothing went wrong at TMDB, and the next run will
+    find the same thing. Merging them is a person's call — `upnext move`.
+    """
+
+
 class NotFoundError(UpnextError):
     """Something was asked for by an id the library does not have."""
 

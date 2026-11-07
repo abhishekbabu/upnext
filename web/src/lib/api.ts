@@ -32,9 +32,6 @@ export const STATUS_LABELS: Record<Status, string> = {
 
 export const STATUSES = Object.keys(STATUS_LABELS) as Status[];
 
-/** A failure the server described in its own words, ready to show as-is. */
-class ApiError extends Error {}
-
 async function request<T>(path: string): Promise<T> {
   let response: Response;
   try {
@@ -42,7 +39,7 @@ async function request<T>(path: string): Promise<T> {
   } catch {
     // fetch rejects only when the request never completed — the server is not
     // running, or the network is gone. Neither has a `detail` to show.
-    throw new ApiError("Cannot reach the upnext server. Is `just serve` running?");
+    throw new Error("Cannot reach the upnext server. Is `just serve` running?");
   }
   if (!response.ok) {
     // FastAPI writes a string `detail` for every failure it raises deliberately;
@@ -50,7 +47,7 @@ async function request<T>(path: string): Promise<T> {
     // the status line.
     const body = await response.json().catch(() => null);
     const detail = body?.detail;
-    throw new ApiError(typeof detail === "string" ? detail : `${response.status} ${response.statusText}`);
+    throw new Error(typeof detail === "string" ? detail : `${response.status} ${response.statusText}`);
   }
   return response.json() as Promise<T>;
 }

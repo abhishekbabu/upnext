@@ -56,6 +56,10 @@ def enrichment_done(result: EnrichmentResult) -> None:
         print("TMDB could not serve these (left as imported, and tried again next run):")
         for name, reason in result.failed:
             print(f"  - {name}: {reason}")
+    if result.duplicates:
+        print("The same show as another title (use `upnext move` to file its seasons there):")
+        for name, reason in result.duplicates:
+            print(f"  - {name}: {reason}")
 
 
 def moved(source_name: str, season: int, result: MoveResult) -> None:

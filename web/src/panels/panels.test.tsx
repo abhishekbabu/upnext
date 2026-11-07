@@ -7,8 +7,9 @@
  * network, no database.
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createQueryClient } from "@/lib/queries";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Airing, AiringItem, Config, Stats, TitleDetail, TitleSummary, UpNextItem } from "@/lib/api";
@@ -87,7 +88,10 @@ const STATS: Stats = {
 
 /** A route that fails, with the body the server would send. */
 class Fails {
-  constructor(readonly body: unknown = {}) {}
+  constructor(
+    readonly body: unknown = {},
+    readonly status = 500,
+  ) {}
 }
 
 /** Answer each endpoint the panels call, and fail loudly on one nobody stubbed. */
@@ -99,8 +103,8 @@ function stubFetch(routes: Record<string, unknown>) {
     if (body instanceof Fails) {
       return Promise.resolve({
         ok: false,
-        status: 500,
-        statusText: "Internal Server Error",
+        status: body.status,
+        statusText: body.status === 422 ? "Unprocessable Entity" : "Internal Server Error",
         json: () => Promise.resolve(body.body),
       } as Response);
     }
@@ -109,9 +113,7 @@ function stubFetch(routes: Record<string, unknown>) {
 }
 
 function draw(ui: React.ReactNode, at = "/") {
-  // retry: false so a stubbed failure surfaces immediately rather than after
-  // three backoffs the test would have to wait out.
-  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client = createQueryClient();
   return render(
     <MemoryRouter initialEntries={[at]}>
       <QueryClientProvider client={client}>
@@ -219,11 +221,11 @@ describe("UpNext", () => {
 
   it("shows the status line, not a list, when validation fails", async () => {
     // FastAPI's 422 carries `detail` as a list of objects.
-    stubFetch({ "/api/up-next": new Fails({ detail: [{ msg: "bad" }] }), "/api/airing": NOTHING_AIRING });
+    stubFetch({ "/api/up-next": new Fails({ detail: [{ msg: "bad" }] }, 422), "/api/airing": NOTHING_AIRING });
     draw(<UpNext />);
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("500 Internal Server Error");
+    expect(alert.textContent).toContain("422 Unprocessable Entity");
     expect(alert.textContent).not.toContain("[object Object]");
   });
 });
@@ -283,6 +285,24 @@ describe("Library", () => {
 
     expect(await screen.findByText("320 watched · none on TMDB’s list")).toBeTruthy();
     expect(screen.queryByRole("progressbar")).toBeNull();
+  });
+
+  it("keeps the search in the address, so going back finds it", async () => {
+    stubFetch({ "/api/titles": [FRIENDS, UNENRICHED] });
+    draw(<Library />, "/library?q=armor");
+
+    expect(await screen.findByText("Armor Wars")).toBeTruthy();
+    expect(screen.queryByText("Friends")).toBeNull();
+    expect(screen.getByRole("searchbox")).toHaveProperty("value", "armor");
+  });
+
+  it("shows initials when TMDB no longer serves a poster", async () => {
+    stubFetch({ "/api/titles": [FRIENDS] });
+    const { container } = draw(<Library />);
+
+    await waitFor(() => expect(container.querySelector("img")).not.toBeNull());
+    fireEvent.error(container.querySelector("img")!);
+    expect(await screen.findByText("F")).toBeTruthy();
   });
 
   it("falls back to initials when the artwork CDN cannot be found", async () => {

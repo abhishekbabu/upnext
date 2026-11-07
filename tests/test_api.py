@@ -224,3 +224,7 @@ def test_the_client_schema_matches_the_api() -> None:
     """
     committed = json.loads((PROJECT_ROOT / "web" / "openapi.json").read_text(encoding="utf-8"))
     assert committed == json.loads(json.dumps(app.openapi()))
+
+
+def test_a_title_id_sqlite_cannot_hold_is_a_422_not_a_500(api: TestClient) -> None:
+    assert api.get(f"/api/titles/{2**64}").status_code == 422

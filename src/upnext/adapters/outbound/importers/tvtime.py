@@ -125,7 +125,7 @@ class TVTimeExport:
             raise ExportError(f"{export_dir} is missing {', '.join(missing)} — is this a TV Time export?")
         try:
             return self._parse(export_dir)
-        except (KeyError, ValueError) as exc:
+        except (KeyError, ValueError, csv.Error, OSError) as exc:
             # A column renamed or a show id that is not a number: TV Time
             # changed its format, or this is not its export.
             raise ExportError(f"{export_dir} does not read as a TV Time export: {exc!r}") from exc

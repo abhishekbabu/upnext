@@ -184,15 +184,10 @@ class EpisodeRow:
     season_number: int
     episode_number: int
     name: str | None = None
-    overview: str | None = None
     air_date: str | None = None
-    runtime: int | None = None
-    still_path: str | None = None
 
     watch_count: int = 0
     """Viewings, not a flag: a rewatch is 2, so the count survives the trip."""
-
-    last_watched_at: str | None = None
 
 
 @dataclass(slots=True)

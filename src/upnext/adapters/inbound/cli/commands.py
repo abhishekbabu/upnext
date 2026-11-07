@@ -10,6 +10,8 @@ import argparse
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from upnext import bootstrap
 from upnext.adapters.inbound.cli import output
 from upnext.adapters.outbound.store.library import Library, open_library
@@ -56,8 +58,9 @@ def cmd_move(args: argparse.Namespace, settings: Settings, library: Library) -> 
 
 def cmd_relink(args: argparse.Namespace, settings: Settings, library: Library) -> None:
     linked = relink(library, library.titles())
-    # Before enrichment every viewing is unmatched because nothing has been
-    # asked, which is not a disagreement with TMDB and is not listed as one.
+    # Read again: relinking changed the counts. Before enrichment every viewing
+    # is unmatched because nothing has been asked, which is not a disagreement
+    # with TMDB and is not listed as one.
     output.relinked(linked, [row for row in library.titles() if row.enriched_at and row.unmatched_watched])
 
 
@@ -83,6 +86,14 @@ def serve(args: argparse.Namespace, settings: Settings) -> None:
 
     app.dependency_overrides[get_settings] = lambda: settings
     uvicorn.run(app, host=args.host or settings.host, port=args.port or settings.port)
+
+
+def _row_id(value: str) -> int:
+    # SQLite integers are 64-bit; a larger one is an OverflowError, not a miss.
+    number = int(value)
+    if not 0 < number < 2**63:
+        raise argparse.ArgumentTypeError(f"not a library id: {value}")
+    return number
 
 
 def _positive(value: str) -> int:
@@ -120,7 +131,9 @@ def build_parser() -> argparse.ArgumentParser:
             "TMDB keeps it as its own title."
         ),
     )
-    p_move.add_argument("--title", type=int, required=True, help="The library id of the title to move a season out of")
+    p_move.add_argument(
+        "--title", type=_row_id, required=True, help="The library id of the title to move a season out of"
+    )
     p_move.add_argument("--season", type=int, required=True, help="The season, as the export numbered it")
     p_move.add_argument("--to", type=int, required=True, metavar="TMDB_ID", help="The TMDB id to move it to")
     p_move.add_argument(
@@ -147,7 +160,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    settings = Settings()
+    try:
+        settings = Settings()
+    except ValidationError as exc:
+        output.error("; ".join(f"UPNEXT_{str(e['loc'][0]).upper()}: {e['msg']}" for e in exc.errors()))
+        return EXIT_FAILED
     if args.db is not None:
         settings = settings.model_copy(update={"db_path": args.db})
     try:

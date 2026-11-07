@@ -15,7 +15,7 @@ const PALETTE =
   "slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|" +
   "teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose";
 const UTILITY = "text|bg|border|ring|fill|stroke|from|via|to|divide|outline|placeholder|shadow|accent|caret|decoration";
-const RAW_COLOR = `\\b(${UTILITY})-((${PALETTE})-[0-9]{2,3}|black|white)\\b`;
+const RAW_COLOR = `\\b(${UTILITY})-((${PALETTE})-[0-9]{2,3}\\b|(black|white)\\b|\\[(#|rgb|hsl|oklch|color))`;
 const RAW_COLOR_MESSAGE =
   "Color comes from semantic tokens — bg-card, text-muted-foreground. A raw " +
   "palette utility cannot follow a mode change.";

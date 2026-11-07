@@ -10,7 +10,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from upnext.domain.errors import CatalogError
+from upnext.domain.errors import CatalogError, DuplicateTitleError
 from upnext.domain.models import Status, TitleRow, TitleState
 from upnext.domain.ports import Catalog, CatalogShow, WatchLibrary
 
@@ -25,9 +25,13 @@ class EnrichmentResult:
     """Titles the catalog knew but could not serve, with why. Nothing was
     stamped, so the next `enrich` tries them again."""
 
+    duplicates: list[tuple[str, str]] = field(default_factory=list)
+    """Titles that are another library title at the catalog, with which. They
+    fail the same way every run until someone runs `upnext move`."""
+
     @property
     def total(self) -> int:
-        return len(self.matched) + len(self.unmatched) + len(self.failed)
+        return len(self.matched) + len(self.unmatched) + len(self.failed) + len(self.duplicates)
 
 
 def resolve_show(catalog: Catalog, title: TitleRow) -> int | None:
@@ -45,11 +49,13 @@ def resolve_show(catalog: Catalog, title: TitleRow) -> int | None:
     if title.tvdb_id and (found := catalog.find_by_tvdb(title.tvdb_id)):
         return found.catalog_id
 
-    for candidate in catalog.search_shows(title.name, year=title.year)[:1]:
-        if title.year and candidate.year is not None and candidate.year != title.year:
-            continue
-        return candidate.catalog_id
-    return None
+    results = catalog.search_shows(title.name, year=title.year)
+    if not results:
+        return None
+    first = results[0]
+    if title.year and first.year is not None and first.year != title.year:
+        return None
+    return first.catalog_id
 
 
 def _store_show(library: WatchLibrary, title_id: int, show: CatalogShow) -> None:
@@ -73,9 +79,7 @@ def enrich_title(catalog: Catalog, library: WatchLibrary, title: TitleRow) -> bo
     if holder is not None and holder.id != title.id:
         # Two rows of the export are one show at the catalog. Merging them is a
         # person's call, the same one `upnext move` makes for a season.
-        raise CatalogError(
-            f"TMDB {catalog_id} is already {holder.name!r} here; use `upnext move` to file its seasons there"
-        )
+        raise DuplicateTitleError(f"TMDB {catalog_id} is already {holder.name!r}")
 
     _store_show(library, title.id, catalog.fetch_show(catalog_id))
     library.link_watches(title.id)
@@ -103,6 +107,9 @@ def enrich(
             ok = enrich_title(catalog, library, title)
         except CatalogError as exc:
             result.failed.append((title.name, str(exc)))
+            ok = False
+        except DuplicateTitleError as exc:
+            result.duplicates.append((title.name, str(exc)))
             ok = False
         else:
             (result.matched if ok else result.unmatched).append(title.name)
