@@ -32,6 +32,8 @@ seen, and any viewings TMDB's episode list cannot account for.
 
 ## Getting started
 
+Needs Python 3.15 (`uv` fetches it if missing), `just`, and `pnpm` for the front end.
+
 ```sh
 just install                       # venv, locked dependencies, git hooks
 cp .env.template .env              # then add a TMDB key, see below
