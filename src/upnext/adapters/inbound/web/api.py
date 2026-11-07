@@ -13,14 +13,16 @@ back here across the proxy configured in `web/vite.config.ts`.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Iterator
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.types import Scope
 
 from upnext.adapters.outbound.store.db import connect
 from upnext.adapters.outbound.store.library import Library
@@ -265,8 +267,14 @@ REVALIDATE = {"cache-control": "no-cache"}
 class ImmutableStatic(StaticFiles):
     """`StaticFiles`, but saying how long a content-hashed asset keeps."""
 
-    def file_response(self, *args: Any, **kwargs: Any) -> Response:
-        response = super().file_response(*args, **kwargs)
+    def file_response(
+        self,
+        full_path: str | os.PathLike[str],
+        stat_result: os.stat_result,
+        scope: Scope,
+        status_code: int = 200,
+    ) -> Response:
+        response = super().file_response(full_path, stat_result, scope, status_code)
         response.headers.update(IMMUTABLE)
         return response
 
@@ -285,7 +293,7 @@ def mount_web() -> None:
     app.mount("/assets", ImmutableStatic(directory=DIST / "assets"), name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
-    def spa(path: str) -> Any:
+    def spa(path: str) -> FileResponse:
         """Any non-API path returns index.html; the client owns routing.
 
         An unmatched API path is a 404 rather than the page, because this

@@ -672,16 +672,19 @@ class Library:
         return int(self.conn.execute("SELECT COUNT(*) AS n FROM titles").fetchone()["n"])
 
     def needing_enrichment(self, *, limit: int | None = None) -> list[TitleRow]:
+        # SQLite reads a negative LIMIT as none at all, so the limit stays a
+        # bound parameter rather than text spliced into the statement.
         rows = self.conn.execute(
-            f"""
+            """
             SELECT t.*, s.status, s.is_favorite, s.rating, s.reported_watched,
                    0 AS episodes_watched, 0 AS unmatched_watched, NULL AS last_watched_at
             FROM titles t
             LEFT JOIN title_state s ON s.title_id = t.id
             WHERE t.enriched_at IS NULL
             ORDER BY t.name
-            {"LIMIT " + str(int(limit)) if limit else ""}
-            """
+            LIMIT ?
+            """,
+            (limit or -1,),
         ).fetchall()
         return [_title_row(row) for row in rows]
 

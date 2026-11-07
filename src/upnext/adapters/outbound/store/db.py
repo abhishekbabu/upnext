@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from importlib import resources
 from pathlib import Path
@@ -180,7 +180,7 @@ def _stop_a_deleted_episode_deleting_the_viewing(conn: sqlite3.Connection) -> No
 
 
 @contextmanager
-def open_library(db_path: Path | str) -> Iterator[sqlite3.Connection]:
+def open_library(db_path: Path | str) -> Generator[sqlite3.Connection]:
     conn = connect(db_path)
     try:
         yield conn

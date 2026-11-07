@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any
 
 import requests
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -64,7 +63,7 @@ class TMDBClient:
         wait=wait_exponential(multiplier=0.5, max=8),
         reraise=True,
     )
-    def get(self, path: str, **params: Any) -> dict:
+    def get(self, path: str, **params: str | int) -> dict:
         self._throttle()
         query = {"api_key": self.api_key, "language": self.language, **params}
         try:
@@ -92,7 +91,7 @@ class TMDBClient:
         return _match(results[0]) if results else None
 
     def search_shows(self, name: str, *, year: int | None = None) -> list[CatalogMatch]:
-        params: dict[str, Any] = {"query": name}
+        params: dict[str, str | int] = {"query": name}
         if year is not None:
             params["first_air_date_year"] = year
         return [_match(item) for item in self.get("/search/tv", **params).get("results") or []]
@@ -132,7 +131,7 @@ class TMDBClient:
     def search(self, name: str, *, kind: Kind = Kind.SHOW, year: int | None = None) -> list[dict]:
         """Raw search, for films — which have no port method until they have an importer."""
         path = "/search/tv" if kind is Kind.SHOW else "/search/movie"
-        params: dict[str, Any] = {"query": name}
+        params: dict[str, str | int] = {"query": name}
         if year is not None:
             params["first_air_date_year" if kind is Kind.SHOW else "year"] = year
         return self.get(path, **params).get("results") or []

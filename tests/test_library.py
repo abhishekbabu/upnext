@@ -101,6 +101,13 @@ def test_only_unenriched_titles_are_listed_for_enrichment(library: Library) -> N
     assert [t.id for t in library.needing_enrichment()] == [stale]
 
 
+def test_a_limit_takes_the_first_titles_by_name_and_none_takes_all(library: Library) -> None:
+    for tvdb_id, name in enumerate(["Lost", "Arrow", "Friends"], start=1):
+        a_show(library, name, tvdb_id=tvdb_id)
+    assert [t.name for t in library.needing_enrichment(limit=2)] == ["Arrow", "Friends"]
+    assert [t.name for t in library.needing_enrichment()] == ["Arrow", "Friends", "Lost"]
+
+
 def test_a_bulk_marked_season_keeps_a_row_per_episode(library: Library) -> None:
     """TV Time stamps every episode of a bulk mark with the same timestamp."""
     title_id = a_show(library, "Beyblade", tvdb_id=70799)
