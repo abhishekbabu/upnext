@@ -22,11 +22,12 @@ export function Poster({
   size?: PosterSize;
   className?: string;
 }) {
-  const { data: config } = useConfig();
+  const { data: config, isPending } = useConfig();
   const src = config ? poster(config.image_base, path, size) : null;
   // Until the artwork CDN is known, a poster that has a path is a blank frame
-  // rather than initials, which would flash and then be replaced.
-  const waiting = !config && path;
+  // rather than initials, which would flash and then be replaced. If it cannot
+  // be known, initials.
+  const waiting = isPending && path;
 
   return (
     <div

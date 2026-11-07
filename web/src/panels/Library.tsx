@@ -56,11 +56,19 @@ export function Library() {
         <Loading shape="shelf" />
       ) : shown.length === 0 ? (
         <Empty
-          title={search ? `Nothing matching “${search}”` : "Nothing here yet"}
+          title={
+            search
+              ? `Nothing matching “${search}”`
+              : status
+                ? `Nothing marked ${STATUS_LABELS[status].toLowerCase()}`
+                : "Nothing here yet"
+          }
           detail={
             search
               ? "Try a shorter fragment — the filter matches anywhere in the name."
-              : "Run `just import <export-dir>` to build a library, then `just enrich` to give it artwork."
+              : status
+                ? undefined
+                : "Run `just import <export-dir>` to build a library, then `just enrich` to give it artwork."
           }
         />
       ) : (
@@ -75,7 +83,7 @@ export function Library() {
                 </div>
                 {progress.kind === "measured" && (
                   <>
-                    <ProgressBar value={progress.share} className="mt-2" />
+                    <ProgressBar value={progress.share} label={title.name} className="mt-2" />
                     <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">
                       {progress.watched} / {progress.total}
                     </p>
@@ -83,6 +91,11 @@ export function Library() {
                 )}
                 {progress.kind === "counted" && (
                   <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">{progress.watched} watched</p>
+                )}
+                {progress.kind === "unenriched" && (
+                  <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">
+                    {progress.watched} watched · not enriched
+                  </p>
                 )}
                 {progress.kind === "unmatched" && (
                   <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">{progress.unmatched} watched</p>

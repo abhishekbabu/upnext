@@ -71,7 +71,7 @@ def test_an_unmatched_title_is_reported_and_left_alone(library: Library) -> None
     assert library.needing_enrichment()[0].id == title.id
 
 
-def test_a_catalog_failure_counts_as_unmatched_rather_than_crashing(library: Library) -> None:
+def test_a_catalog_failure_is_reported_as_failed_rather_than_crashing(library: Library) -> None:
     class Broken(FakeCatalog):
         def find_by_tvdb(self, tvdb_id: int):
             raise CatalogError("boom")

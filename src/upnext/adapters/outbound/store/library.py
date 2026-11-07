@@ -28,6 +28,7 @@ from upnext.domain.models import (
     TitleState,
     UnmatchedWatch,
     Watch,
+    in_status_order,
 )
 
 if TYPE_CHECKING:
@@ -193,14 +194,17 @@ class Library:
         fifty watches the source declined to number do not either.
 
         On the source's numbering rather than on a resolved episode, because a
-        re-import must converge whether or not enrichment has run since.
+        re-import must converge whether or not enrichment has run since. The
+        source's id is looked up under any title, because `upnext move` may
+        have filed the viewing elsewhere since. Both mirror the unique indexes
+        on `watches` in schema.sql.
         """
         if watch.source_episode_id is not None:
             sql = """
                 SELECT 1 FROM watches
-                WHERE title_id = ? AND source = ? AND source_episode_id = ? AND watched_at = ?
+                WHERE source = ? AND source_episode_id = ? AND watched_at = ?
             """
-            params: tuple[object, ...] = (title_id, watch.source, watch.source_episode_id, watch.watched_at)
+            params: tuple[object, ...] = (watch.source, watch.source_episode_id, watch.watched_at)
         else:
             season, number = watch.episode or (None, None)
             sql = """
@@ -364,7 +368,7 @@ class Library:
         rows = self.conn.execute(
             f"""
             {SHELF_EPISODES}
-            JOIN title_state s ON s.title_id = t.id AND s.status = 'watching'
+            JOIN title_state s ON s.title_id = t.id AND s.status = ?
             WHERE e.id = (
                   SELECT e2.id FROM episodes e2
                   WHERE e2.title_id = t.id AND e2.season_number > 0
@@ -375,7 +379,7 @@ class Library:
             ORDER BY last_watched_at DESC NULLS LAST
             LIMIT ?
             """,
-            (limit,),
+            (Status.WATCHING, limit),
         ).fetchall()
         return [_from_row(ShelfEpisode, row) for row in rows]
 
@@ -432,8 +436,7 @@ class Library:
             """
         ).fetchone()
         counts = dict(self.conn.execute("SELECT status, COUNT(*) FROM title_state GROUP BY status").fetchall())
-        by_status = {status: counts[status] for status in Status if counts.get(status)}
-        return _from_row(LibraryStats, totals, by_status=by_status)
+        return _from_row(LibraryStats, totals, by_status=in_status_order(counts))
 
     def _find_title_id(self, title: Title) -> int | None:
         for column, value in (("tmdb_id", title.tmdb_id), ("tvdb_id", title.tvdb_id), ("name", title.name)):

@@ -7,18 +7,20 @@ import { cn } from "@/lib/utils";
  * of the way" is 40 of 45 or 400 of 450, and it says nothing at all to a
  * screen reader without the role below.
  */
-export function ProgressBar({ value, className }: { value: number; className?: string }) {
-  const percent = Math.round(value * 100);
+export function ProgressBar({ value, label, className }: { value: number; label: string; className?: string }) {
+  // Floored, so 227 of 228 never reads as 100.
+  const percent = Math.floor(value * 100);
   return (
     <div
       className={cn("h-1 w-full overflow-hidden rounded-full bg-accent", className)}
       role="progressbar"
+      aria-label={label}
       aria-valuenow={percent}
       aria-valuemin={0}
       aria-valuemax={100}
     >
       <div
-        className={cn("h-full rounded-full transition-[width]", percent === 100 ? "bg-ok" : "bg-primary")}
+        className={cn("h-full rounded-full transition-[width]", value >= 1 ? "bg-ok" : "bg-primary")}
         style={{ width: `${percent}%` }}
       />
     </div>

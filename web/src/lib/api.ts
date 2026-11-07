@@ -33,7 +33,7 @@ export const STATUS_LABELS: Record<Status, string> = {
 export const STATUSES = Object.keys(STATUS_LABELS) as Status[];
 
 /** A failure the server described in its own words, ready to show as-is. */
-export class ApiError extends Error {}
+class ApiError extends Error {}
 
 async function request<T>(path: string): Promise<T> {
   let response: Response;
@@ -45,10 +45,12 @@ async function request<T>(path: string): Promise<T> {
     throw new ApiError("Cannot reach the upnext server. Is `just serve` running?");
   }
   if (!response.ok) {
-    // FastAPI writes `detail` for every failure it raises deliberately;
-    // anything without one is a genuine fault and gets the status line.
+    // FastAPI writes a string `detail` for every failure it raises deliberately;
+    // a validation failure's is a list, and that and anything without one get
+    // the status line.
     const body = await response.json().catch(() => null);
-    throw new ApiError(body?.detail ?? `${response.status} ${response.statusText}`);
+    const detail = body?.detail;
+    throw new ApiError(typeof detail === "string" ? detail : `${response.status} ${response.statusText}`);
   }
   return response.json() as Promise<T>;
 }

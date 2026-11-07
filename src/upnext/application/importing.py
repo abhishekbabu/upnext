@@ -11,7 +11,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from upnext.domain.models import ImportedTitle, Status
+from upnext.domain.models import ImportedTitle, Status, in_status_order
 from upnext.domain.ports import ImportSource, WatchLibrary
 
 
@@ -29,9 +29,7 @@ def summarize(imported: list[ImportedTitle]) -> ImportSummary:
     return ImportSummary(
         titles=len(imported),
         watches=sum(len(item.watches) for item in imported),
-        # Ordered by the enum rather than by count, so two runs of the same
-        # import print their statuses in the same order.
-        by_status={status: counts[status] for status in Status if counts[status]},
+        by_status=in_status_order(counts),
     )
 
 

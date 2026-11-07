@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { Failed, Loading } from "@/components/ui/state";
 import { STATUSES, STATUS_LABELS } from "@/lib/api";
-import { hours, shortDate } from "@/lib/format";
+import { count, hours, shortDate } from "@/lib/format";
 import { useStats } from "@/lib/queries";
 
 /** The library in figures. */
@@ -18,9 +18,9 @@ export function Stats() {
       <PageHeader title="Stats" detail="What the library adds up to." />
 
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Figure label="Watches" value={data.watches.toLocaleString()} />
-        <Figure label="Episodes" value={data.episodes_watched.toLocaleString()} />
-        <Figure label="Titles" value={data.titles_watched.toLocaleString()} />
+        <Figure label="Watches" value={count(data.watches)} />
+        <Figure label="Episodes" value={count(data.episodes_watched)} />
+        <Figure label="Titles" value={count(data.titles_watched)} />
         {/* A floor, not a total: only enriched episodes carry a runtime. */}
         <Figure label="At least" value={runtime || "—"} />
       </dl>
@@ -47,7 +47,7 @@ export function Stats() {
 function Figure({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border border-border bg-card px-3.5 py-3">
-      <dt className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <dt className="eyebrow text-[10.5px]">
         {label}
       </dt>
       <dd className="mt-1 font-display text-xl font-semibold tracking-tight">{value}</dd>

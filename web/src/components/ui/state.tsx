@@ -14,10 +14,7 @@ export function Loading({ shape = "rows" }: { shape?: "rows" | "shelf" }) {
   return (
     <div
       className={shape === "shelf" ? SHELF_GRID : "flex flex-col gap-3"}
-      // Announced politely: a screen reader should hear that something is
-      // coming, not have the page read out again as rows arrive.
       role="status"
-      aria-live="polite"
       aria-label="Loading"
     >
       {Array.from({ length: shape === "shelf" ? 12 : 5 }, (_, i) =>
@@ -49,7 +46,7 @@ export function Failed({ error }: { error: unknown }) {
   const message = error instanceof Error ? error.message : "Something went wrong.";
   return (
     <div className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3.5" role="alert">
-      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-destructive">Error</p>
+      <p className="eyebrow text-destructive">Error</p>
       <p className="mt-1 text-[13.5px] leading-relaxed">{message}</p>
     </div>
   );
