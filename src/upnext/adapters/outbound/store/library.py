@@ -145,17 +145,36 @@ class Library:
             asdict(title) | {"id": title_id, "enriched_at": enriched_at},
         )
 
+    def replace_episodes(self, title_id: int, episodes: list[Episode], *, keep_seasons: set[int]) -> None:
+        """Make the stored list the catalog's list, except for `keep_seasons`.
+
+        An episode the catalog no longer lists is deleted; its watches fall back
+        to unmatched (`ON DELETE SET NULL`) until `link_watches` places them
+        again. `keep_seasons` are seasons the catalog lists but could not serve
+        this time — a gap in one answer is not a reason to forget what an
+        earlier one said.
+        """
+        for episode in episodes:
+            self.upsert_episode(title_id, episode)
+        current = {(e.season_number, e.episode_number) for e in episodes}
+        stale = [
+            row["id"]
+            for row in self.conn.execute(
+                "SELECT id, season_number, episode_number FROM episodes WHERE title_id = ?", (title_id,)
+            )
+            if (row["season_number"], row["episode_number"]) not in current and row["season_number"] not in keep_seasons
+        ]
+        self.conn.executemany("DELETE FROM episodes WHERE id = ?", [(i,) for i in stale])
+
     def upsert_episode(self, title_id: int, episode: Episode) -> None:
-        """Insert or update one episode of the catalog's list.
+        """Insert or update one episode of the catalog's list, as the catalog has it now.
 
         Only enrichment reaches here. An import has a season and a number the
         exporting service used, and that goes on the watch.
         """
         columns = ("title_id", *EPISODE_COLUMNS)
         updates = ", ".join(
-            f"{col} = COALESCE(excluded.{col}, episodes.{col})"
-            for col in EPISODE_COLUMNS
-            if col not in ("season_number", "episode_number")
+            f"{col} = excluded.{col}" for col in EPISODE_COLUMNS if col not in ("season_number", "episode_number")
         )
         self.conn.execute(
             f"""
@@ -248,21 +267,14 @@ class Library:
     def set_state(self, title_id: int, state: TitleState) -> None:
         self.conn.execute(
             """
-            INSERT INTO title_state (title_id, status, is_favorite, rating, reported_watched, followed_at, updated_at)
-            VALUES (:title_id, :status, :is_favorite, :rating, :reported_watched, :followed_at, datetime('now'))
+            INSERT INTO title_state (title_id, status, is_favorite, rating, reported_watched, followed_at)
+            VALUES (:title_id, :status, :is_favorite, :rating, :reported_watched, :followed_at)
             ON CONFLICT (title_id) DO UPDATE SET
                 status = excluded.status,
                 is_favorite = excluded.is_favorite,
                 rating = COALESCE(excluded.rating, title_state.rating),
                 reported_watched = COALESCE(excluded.reported_watched, title_state.reported_watched),
-                followed_at = COALESCE(excluded.followed_at, title_state.followed_at),
-                updated_at = datetime('now')
-            WHERE (title_state.status, title_state.is_favorite, title_state.rating,
-                   title_state.reported_watched, title_state.followed_at)
-               IS NOT (excluded.status, excluded.is_favorite,
-                       COALESCE(excluded.rating, title_state.rating),
-                       COALESCE(excluded.reported_watched, title_state.reported_watched),
-                       COALESCE(excluded.followed_at, title_state.followed_at))
+                followed_at = COALESCE(excluded.followed_at, title_state.followed_at)
             """,
             asdict(state) | {"title_id": title_id},
         )

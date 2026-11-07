@@ -5,7 +5,7 @@ from conftest import FakeCatalog
 from upnext.adapters.outbound.store.library import Library
 from upnext.application.enrichment import enrich, enrich_title, resolve_show
 from upnext.domain.errors import CatalogError
-from upnext.domain.models import Status, Title, TitleState, Watch
+from upnext.domain.models import Episode, Status, Title, TitleState, Watch
 from upnext.domain.ports import CatalogMatch
 
 
@@ -104,3 +104,29 @@ def test_a_second_title_resolving_to_a_held_catalog_id_fails_alone(library: Libr
     assert result.matched == ["Friends"]
     assert result.failed == []
     assert result.duplicates == [("Friends (Reunion)", "TMDB 1668 is already 'Friends'")]
+
+
+def test_re_enrichment_leaves_the_catalog_s_list_as_it_now_is(library: Library) -> None:
+    """TMDB merges, renumbers and renames; the stored list follows it."""
+    title = imported(library, tvdb_id=79168)
+    library.record_watch(title.id, Watch(watched_at="2018-05-12 01:10:14", episode=(1, 2), source="tvtime"))
+    enrich_title(FakeCatalog(found=CatalogMatch(catalog_id=1668)), library, title)
+    assert library.title(title.id).episodes_watched == 1
+
+    revised = [Episode(season_number=1, episode_number=1, name=None, runtime=22)]
+    enrich_title(FakeCatalog(found=CatalogMatch(catalog_id=1668), episodes=revised), library, library.title(title.id))
+
+    assert [(e.season_number, e.episode_number, e.name) for e in library.episodes(title.id)] == [(1, 1, None)]
+    row = library.title(title.id)
+    assert (row.episodes_watched, row.unmatched_watched) == (0, 1)
+
+
+def test_a_season_the_catalog_could_not_serve_keeps_what_it_had(library: Library) -> None:
+    title = imported(library, tvdb_id=79168)
+    enrich_title(FakeCatalog(found=CatalogMatch(catalog_id=1668)), library, title)
+
+    only_specials = [Episode(season_number=0, episode_number=1, name="Special")]
+    catalog = FakeCatalog(found=CatalogMatch(catalog_id=1668), episodes=only_specials, unserved={1})
+    enrich_title(catalog, library, library.title(title.id))
+
+    assert [(e.season_number, e.episode_number) for e in library.episodes(title.id)] == [(0, 1), (1, 1), (1, 2)]

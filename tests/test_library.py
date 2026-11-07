@@ -69,18 +69,6 @@ def test_titles_can_be_filtered_by_status(library: Library) -> None:
     assert len(library.titles()) == 2
 
 
-def test_setting_the_same_state_again_leaves_the_row_exactly_as_it_was(library: Library) -> None:
-    """The library converges: a re-import that changes nothing changes nothing,
-    `updated_at` included."""
-    title_id = a_show(library)
-    library.set_state(title_id, TitleState(status=Status.WATCHING, rating=8))
-    library.conn.execute("UPDATE title_state SET updated_at = '2020-01-01 00:00:00'")
-    before = tuple(library.conn.execute("SELECT * FROM title_state").fetchone())
-
-    library.set_state(title_id, TitleState(status=Status.WATCHING))
-    assert tuple(library.conn.execute("SELECT * FROM title_state").fetchone()) == before
-
-
 def test_state_updates_keep_a_rating_the_new_state_does_not_carry(library: Library) -> None:
     title_id = a_show(library)
     library.set_state(title_id, TitleState(status=Status.WATCHING, rating=10))

@@ -151,6 +151,7 @@ def test_a_season_tmdb_cannot_serve_does_not_abandon_the_show() -> None:
     )
     show = client(session).fetch_show(1668)
     assert [(e.season_number, e.episode_number) for e in show.episodes] == [(1, 1)]
+    assert show.unserved == {0}
 
 
 def test_a_season_the_show_did_not_number_is_skipped() -> None:

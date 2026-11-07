@@ -75,6 +75,9 @@ watch, and `link_watches` matches the two once there is a list to match against.
 A row invented from a watch is a claim about a show's structure made by
 something that is not the source of truth for it, and it inflates every count
 measured against the list.
+Each enrichment makes it the catalog's list *as it is now* (`replace_episodes`):
+episodes TMDB dropped are deleted and their watches relinked, except in seasons
+TMDB listed but failed to serve (`CatalogShow.unserved`), which keep what they had.
 
 **Matching is exact on episode number, never approximate.** The rules are pure
 functions in `domain/matching.py`; the store only loads and writes. A near miss

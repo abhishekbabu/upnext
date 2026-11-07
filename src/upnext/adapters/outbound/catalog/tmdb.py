@@ -133,6 +133,7 @@ class TMDBClient:
         """
         detail = self.show(catalog_id)
         episodes: list[Episode] = []
+        unserved: set[int] = set()
         for season in detail.get("seasons") or []:
             number = season.get("season_number")
             if number is None:
@@ -144,9 +145,10 @@ class TMDBClient:
                 # show enriched with it missing.
                 raise
             except CatalogError:
+                unserved.add(int(number))
                 continue
             episodes.extend(episodes_from_season(payload))
-        return CatalogShow(title=title_from_show(detail), episodes=episodes)
+        return CatalogShow(title=title_from_show(detail), episodes=episodes, unserved=unserved)
 
     def show(self, tmdb_id: int) -> dict:
         return self.get(f"/tv/{tmdb_id}", append_to_response="external_ids")
