@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from upnext.adapters.outbound.store.library import Library
+from pathlib import Path
+
+from upnext.adapters.outbound.store.library import Library, open_library
 from upnext.domain.models import Episode, Kind, Status, Title, TitleState, Watch
 
 
@@ -33,7 +35,7 @@ def test_a_film_watched_twice_on_the_same_day_is_stored_once(library: Library) -
     title_id = library.upsert_title(Title(name="Arrival", kind=Kind.MOVIE, tmdb_id=329865))
     for _ in range(2):
         library.record_watch(title_id, Watch(watched_at="2026-01-01 20:00:00", source="tvtime"))
-    assert library.stats()["watches"] == 1
+    assert library.stats().watches == 1
 
 
 def test_up_next_is_the_lowest_unwatched_episode_and_skips_specials(library: Library) -> None:
@@ -46,28 +48,37 @@ def test_up_next_is_the_lowest_unwatched_episode_and_skips_specials(library: Lib
     library.record_watch(title_id, Watch(watched_at="2020-01-03 00:00:00", episode=(1, 3)))
     library.link_watches(title_id)
 
-    (row,) = library.up_next()
-    assert (row["season_number"], row["episode_number"]) == (1, 2)
+    (row,) = library.up_next(limit=10)
+    assert (row.season_number, row.episode_number) == (1, 2)
 
 
 def test_up_next_ignores_titles_that_are_not_being_watched(library: Library) -> None:
     title_id = a_show(library)
     library.set_state(title_id, TitleState(status=Status.COMPLETED))
     library.upsert_episode(title_id, Episode(season_number=1, episode_number=1))
-    assert library.up_next() == []
+    assert library.up_next(limit=10) == []
 
 
-def test_titles_can_be_filtered_by_status_and_kind(library: Library) -> None:
+def test_titles_can_be_filtered_by_status(library: Library) -> None:
     watching = a_show(library, "Friends", tvdb_id=1)
     completed = a_show(library, "Arrow", tvdb_id=2)
-    film = library.upsert_title(Title(name="Arrival", kind=Kind.MOVIE, tmdb_id=329865))
     library.set_state(watching, TitleState(status=Status.WATCHING))
     library.set_state(completed, TitleState(status=Status.COMPLETED))
-    library.set_state(film, TitleState(status=Status.COMPLETED))
 
     assert [t.name for t in library.titles(status=Status.WATCHING)] == ["Friends"]
-    assert [t.name for t in library.titles(kind=Kind.MOVIE)] == ["Arrival"]
-    assert len(library.titles()) == 3
+    assert len(library.titles()) == 2
+
+
+def test_setting_the_same_state_again_leaves_the_row_exactly_as_it_was(library: Library) -> None:
+    """The library converges: a re-import that changes nothing changes nothing,
+    `updated_at` included."""
+    title_id = a_show(library)
+    library.set_state(title_id, TitleState(status=Status.WATCHING, rating=8))
+    library.conn.execute("UPDATE title_state SET updated_at = '2020-01-01 00:00:00'")
+    before = tuple(library.conn.execute("SELECT * FROM title_state").fetchone())
+
+    library.set_state(title_id, TitleState(status=Status.WATCHING))
+    assert tuple(library.conn.execute("SELECT * FROM title_state").fetchone()) == before
 
 
 def test_state_updates_keep_a_rating_the_new_state_does_not_carry(library: Library) -> None:
@@ -85,7 +96,7 @@ def test_known_minutes_counts_episode_runtime_where_it_exists(library: Library) 
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
     library.record_watch(title_id, Watch(watched_at="2020-01-02 00:00:00", episode=(1, 2)))
     library.link_watches(title_id)
-    assert library.stats()["known_minutes"] == 22
+    assert library.stats().known_minutes == 22
 
 
 def test_count_titles_counts_everything_stored(library: Library) -> None:
@@ -116,12 +127,12 @@ def test_a_bulk_marked_season_keeps_a_row_per_episode(library: Library) -> None:
             library.title(title_id).id,
             Watch(watched_at="2019-01-01 00:00:00", source="tvtime", source_episode_id=source_id),
         )
-    assert library.stats()["watches"] == 3
+    assert library.stats().watches == 3
     # Re-importing the same export must not add a fourth.
     library.record_watch(
         title_id, Watch(watched_at="2019-01-01 00:00:00", source="tvtime", source_episode_id="4149573")
     )
-    assert library.stats()["watches"] == 3
+    assert library.stats().watches == 3
 
 
 def test_unnumbered_watches_still_count_toward_the_title(library: Library) -> None:
@@ -143,8 +154,8 @@ def test_airing_next_starts_at_today_and_leaves_yesterday_behind(library: Librar
     library.upsert_episode(title_id, Episode(season_number=1, episode_number=2, air_date=TODAY))
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
 
-    airing = library.airing_next(TODAY)
-    assert [row["air_date"] for row in airing] == [TODAY]
+    airing = library.airing_next(TODAY, limit=10)
+    assert [row.air_date for row in airing] == [TODAY]
 
 
 def test_airing_next_covers_shows_watched_whatever_their_status(library: Library) -> None:
@@ -158,8 +169,8 @@ def test_airing_next_covers_shows_watched_whatever_their_status(library: Library
     library.upsert_episode(stopped, Episode(season_number=4, episode_number=5, air_date="2026-07-01"))
     library.record_watch(stopped, Watch(watched_at="2023-01-01 00:00:00", episode=(1, 1)))
 
-    airing = library.airing_next(TODAY)
-    assert [row["name"] for row in airing] == ["Ted Lasso"]
+    airing = library.airing_next(TODAY, limit=10)
+    assert [row.name for row in airing] == ["Ted Lasso"]
 
 
 def test_airing_next_ignores_a_show_never_watched(library: Library) -> None:
@@ -172,7 +183,7 @@ def test_airing_next_ignores_a_show_never_watched(library: Library) -> None:
     library.set_state(unwatched, TitleState(status=Status.WATCHLIST))
     library.upsert_episode(unwatched, Episode(season_number=4, episode_number=6, air_date="2026-07-01"))
 
-    assert library.airing_next(TODAY) == []
+    assert library.airing_next(TODAY, limit=10) == []
 
 
 def test_airing_next_skips_specials_and_episodes_with_no_date(library: Library) -> None:
@@ -183,8 +194,8 @@ def test_airing_next_skips_specials_and_episodes_with_no_date(library: Library) 
     library.upsert_episode(title_id, Episode(season_number=2, episode_number=2, air_date="2026-07-02"))
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(2, 1)))
 
-    airing = library.airing_next(TODAY)
-    assert [(row["season_number"], row["episode_number"]) for row in airing] == [(2, 2)]
+    airing = library.airing_next(TODAY, limit=10)
+    assert [(row.season_number, row.episode_number) for row in airing] == [(2, 2)]
 
 
 def test_airing_next_is_ordered_by_the_calendar_across_shows(library: Library) -> None:
@@ -194,8 +205,8 @@ def test_airing_next_is_ordered_by_the_calendar_across_shows(library: Library) -
         library.upsert_episode(title_id, Episode(season_number=2, episode_number=1, air_date=air_date))
         library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
 
-    airing = library.airing_next(TODAY)
-    assert [row["name"] for row in airing] == ["Chad Powers", "Shark Tank", "Stick"]
+    airing = library.airing_next(TODAY, limit=10)
+    assert [row.name for row in airing] == ["Chad Powers", "Shark Tank", "Stick"]
 
 
 def test_airing_next_honours_its_limit(library: Library) -> None:
@@ -205,3 +216,20 @@ def test_airing_next_honours_its_limit(library: Library) -> None:
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
 
     assert len(library.airing_next(TODAY, limit=3)) == 3
+
+
+def test_reopening_a_library_leaves_it_as_it_was(tmp_path: Path) -> None:
+    """The schema is applied on every connect, so applying it has to be a no-op
+    on a library that already has it."""
+    db_path = tmp_path / "library.db"
+    with open_library(db_path) as library:
+        title_id = library.upsert_title(Title(name="Friends", tvdb_id=79168))
+        library.set_state(title_id, TitleState(status=Status.WATCHING))
+        library.upsert_episode(title_id, Episode(season_number=1, episode_number=1))
+        library.record_watch(title_id, Watch(watched_at="2018-05-12 01:10:14", episode=(1, 1)))
+        library.link_watches(title_id)
+
+    with open_library(db_path) as library:
+        row = library.title(title_id)
+    assert row is not None
+    assert (row.status, row.episodes_watched) == (Status.WATCHING, 1)

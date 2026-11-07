@@ -4,25 +4,25 @@ from pathlib import Path
 
 import pytest
 
-from upnext.adapters.outbound.importers.tvtime import read_export
+from upnext.adapters.outbound.importers.tvtime import TVTimeExport
 from upnext.domain.errors import ExportError
 from upnext.domain.models import Status
 
 
 def by_name(export_dir: Path) -> dict:
-    return {item.title.name: item for item in read_export(export_dir)}
+    return {item.title.name: item for item in TVTimeExport().read(export_dir)}
 
 
 def test_rejects_a_folder_that_is_not_an_export(tmp_path: Path) -> None:
     with pytest.raises(ExportError, match="missing"):
-        read_export(tmp_path)
+        TVTimeExport().read(tmp_path)
 
 
 def test_rejects_a_path_that_is_not_a_directory(tmp_path: Path) -> None:
     file = tmp_path / "export.zip"
     file.write_text("")
     with pytest.raises(ExportError, match="not a directory"):
-        read_export(file)
+        TVTimeExport().read(file)
 
 
 def test_statuses_come_from_active_and_archived(export_dir: Path) -> None:
@@ -82,7 +82,7 @@ def test_a_non_year_parenthetical_is_left_in_the_name(export_dir: Path, write_cs
             }
         ],
     )
-    names = {item.title.name: item.title.year for item in read_export(export_dir)}
+    names = {item.title.name: item.title.year for item in TVTimeExport().read(export_dir)}
     assert names["Whose Line Is It Anyway? (US)"] is None
 
 

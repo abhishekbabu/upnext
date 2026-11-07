@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { StatusBadge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/ui/page-header";
-import { Poster } from "@/components/ui/poster";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { Shelf, ShelfCard } from "@/components/ui/shelf";
 import { Empty, Failed, Loading } from "@/components/ui/state";
 import { STATUSES, STATUS_LABELS, type Status } from "@/lib/api";
 import { progressOf } from "@/lib/format";
-import { useConfig, useTitles } from "@/lib/queries";
+import { useTitles } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 /** Everything, filterable by status and searchable by name. */
@@ -16,7 +16,6 @@ export function Library() {
   const status = asStatus(params.get("status"));
   const [search, setSearch] = useState("");
 
-  const config = useConfig();
   const { data, isPending, error } = useTitles(status);
 
   const shown = useMemo(() => {
@@ -53,7 +52,7 @@ export function Library() {
 
       {error ? (
         <Failed error={error} />
-      ) : isPending || config.isPending ? (
+      ) : isPending ? (
         <Loading shape="shelf" />
       ) : shown.length === 0 ? (
         <Empty
@@ -65,49 +64,33 @@ export function Library() {
           }
         />
       ) : (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-x-5 gap-y-7">
+        <Shelf>
           {shown.map((title) => {
             const progress = progressOf(title);
             return (
-              <li key={title.id}>
-                <Link
-                  to={`/titles/${title.id}`}
-                  className="group block rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
-                >
-                  <Poster
-                    name={title.name}
-                    path={title.poster_path}
-                    base={config.data?.image_base ?? ""}
-                    className="transition-opacity group-hover:opacity-85"
-                  />
-                  <p className="mt-2.5 truncate text-[13.5px] font-medium leading-snug" title={title.name}>
-                    {title.name}
-                  </p>
-                  <div className="mt-1 flex items-center gap-1.5">
-                    <StatusBadge status={title.status} />
-                    {title.year && <span className="font-mono text-[10.5px] text-muted-foreground">{title.year}</span>}
-                  </div>
-                  {progress.kind === "measured" && (
-                    <>
-                      <ProgressBar value={progress.share} className="mt-2" />
-                      <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">
-                        {progress.watched} / {progress.total}
-                      </p>
-                    </>
-                  )}
-                  {progress.kind === "counted" && (
-                    <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">{progress.watched} watched</p>
-                  )}
-                  {progress.kind === "unmatched" && (
-                    <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">
-                      {progress.unmatched} watched
+              <ShelfCard key={title.id} titleId={title.id} name={title.name} posterPath={title.poster_path}>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <StatusBadge status={title.status} />
+                  {title.year && <span className="font-mono text-[10.5px] text-muted-foreground">{title.year}</span>}
+                </div>
+                {progress.kind === "measured" && (
+                  <>
+                    <ProgressBar value={progress.share} className="mt-2" />
+                    <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">
+                      {progress.watched} / {progress.total}
                     </p>
-                  )}
-                </Link>
-              </li>
+                  </>
+                )}
+                {progress.kind === "counted" && (
+                  <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">{progress.watched} watched</p>
+                )}
+                {progress.kind === "unmatched" && (
+                  <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">{progress.unmatched} watched</p>
+                )}
+              </ShelfCard>
             );
           })}
-        </ul>
+        </Shelf>
       )}
     </>
   );

@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
-import { poster, type PosterSize } from "@/lib/format";
+import { initials, poster, type PosterSize } from "@/lib/format";
+import { useConfig } from "@/lib/queries";
 
 /**
  * A title's artwork, or a legible stand-in for it.
@@ -13,17 +14,19 @@ import { poster, type PosterSize } from "@/lib/format";
 export function Poster({
   name,
   path,
-  base,
   size = "w342",
   className,
 }: {
   name: string;
   path: string | null;
-  base: string;
   size?: PosterSize;
   className?: string;
 }) {
-  const src = poster(base, path, size);
+  const { data: config } = useConfig();
+  const src = config ? poster(config.image_base, path, size) : null;
+  // Until the artwork CDN is known, a poster that has a path is a blank frame
+  // rather than initials, which would flash and then be replaced.
+  const waiting = !config && path;
 
   return (
     <div
@@ -43,7 +46,7 @@ export function Poster({
           decoding="async"
           className="size-full object-cover"
         />
-      ) : (
+      ) : waiting ? null : (
         <div className="flex size-full items-center justify-center bg-secondary p-2">
           <span className="font-display text-2xl font-semibold text-muted-foreground" aria-hidden>
             {initials(name)}
@@ -53,23 +56,3 @@ export function Poster({
     </div>
   );
 }
-
-/** Up to two initials from a title: "The Last of Us" -> "LU". */
-export function initials(name: string): string {
-  const words = name
-    // Apostrophes come out before anything else splits on punctuation, so a
-    // possessive stays one word: "Aegon's Conquest" is AC, not AS.
-    .replace(/['\u2018\u2019]/g, "")
-    .replace(/[^\p{L}\p{N} ]/gu, " ")
-    .split(" ")
-    .filter((word) => word && !STOP_WORDS.has(word.toLowerCase()));
-  if (words.length === 0) return name.slice(0, 1).toUpperCase() || "?";
-  return words
-    .slice(0, 2)
-    .map((word) => word[0]!.toUpperCase())
-    .join("");
-}
-
-// Dropped so "The Office" reads as "O" rather than "TO", which would collide
-// with half a shelf.
-const STOP_WORDS = new Set(["the", "a", "an", "of", "and"]);

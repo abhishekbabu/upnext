@@ -21,10 +21,4 @@ def test_building_a_catalog_without_a_key_says_what_to_set() -> None:
 
 
 def test_the_default_import_source_is_registered() -> None:
-    source = bootstrap.import_source(bootstrap.DEFAULT_IMPORT_SOURCE)
-    assert source.name == "tvtime"
-
-
-def test_an_unknown_import_source_names_the_ones_that_exist() -> None:
-    with pytest.raises(ConfigurationError, match="Available: tvtime"):
-        bootstrap.import_source("letterboxd")
+    assert bootstrap.IMPORT_SOURCES[bootstrap.DEFAULT_IMPORT_SOURCE].name == "tvtime"

@@ -12,7 +12,7 @@ import threading
 import time
 
 import requests
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import RetryCallState, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from upnext.domain.errors import CatalogError, ConfigurationError, RetryableCatalogError
 from upnext.domain.models import Episode, Kind, Title
@@ -20,6 +20,21 @@ from upnext.domain.ports import CatalogMatch, CatalogShow
 
 BASE_URL = "https://api.themoviedb.org/3"
 TIMEOUT_SECONDS = 15
+
+_exponential = wait_exponential(multiplier=0.5, max=8)
+
+
+class _RateLimited(RetryableCatalogError):
+    """A 429. TMDB's guidance is to wait as long as its Retry-After says."""
+
+    def __init__(self, retry_after: float) -> None:
+        super().__init__(f"rate limited for {retry_after:g}s")
+        self.retry_after = retry_after
+
+
+def _backoff(state: RetryCallState) -> float:
+    exc = state.outcome.exception() if state.outcome else None
+    return exc.retry_after if isinstance(exc, _RateLimited) else _exponential(state)
 
 
 class TMDBClient:
@@ -35,8 +50,8 @@ class TMDBClient:
         self,
         api_key: str,
         *,
-        language: str = "en-US",
-        min_interval_seconds: float = 0.05,
+        language: str,
+        min_interval_seconds: float,
         session: requests.Session | None = None,
     ) -> None:
         if not api_key:
@@ -48,8 +63,6 @@ class TMDBClient:
         self._lock = threading.Lock()
         self._last_call = 0.0
 
-    # ------------------------------------------------------------- transport
-
     def _throttle(self) -> None:
         with self._lock:
             elapsed = time.monotonic() - self._last_call
@@ -60,7 +73,7 @@ class TMDBClient:
     @retry(
         retry=retry_if_exception_type(RetryableCatalogError),
         stop=stop_after_attempt(4),
-        wait=wait_exponential(multiplier=0.5, max=8),
+        wait=_backoff,
         reraise=True,
     )
     def get(self, path: str, **params: str | int) -> dict:
@@ -72,19 +85,19 @@ class TMDBClient:
             raise RetryableCatalogError(str(exc)) from exc
 
         if response.status_code == 429:
-            # TMDB's own guidance is to honour Retry-After; sleeping here keeps
-            # the backoff in one place rather than splitting it with tenacity.
-            time.sleep(float(response.headers.get("Retry-After", "1")))
-            raise RetryableCatalogError("rate limited")
+            raise _RateLimited(float(response.headers.get("Retry-After", "1")))
         if response.status_code >= 500:
             raise RetryableCatalogError(f"TMDB {response.status_code} for {path}")
+        if response.status_code == 401:
+            raise ConfigurationError(
+                "TMDB rejected the API key. Check UPNEXT_TMDB_API_KEY in .env — the v3 key is "
+                "32 hex characters, not the much longer read access token."
+            )
         if response.status_code == 404:
             raise CatalogError(f"TMDB has nothing at {path}")
         if not response.ok:
             raise CatalogError(f"TMDB {response.status_code} for {path}: {response.text[:200]}")
         return response.json()
-
-    # ------------------------------------------------------------- endpoints
 
     def find_by_tvdb(self, tvdb_id: int) -> CatalogMatch | None:
         results = self.get("/find/" + str(tvdb_id), external_source="tvdb_id").get("tv_results") or []
@@ -112,12 +125,14 @@ class TMDBClient:
                 continue
             try:
                 payload = self.season(catalog_id, int(number))
+            except RetryableCatalogError:
+                # An outage, not a gap: skipping the season would stamp the
+                # show enriched with it missing.
+                raise
             except CatalogError:
                 continue
             episodes.extend(episodes_from_season(payload))
         return CatalogShow(title=title_from_show(detail), episodes=episodes)
-
-    # ------------------------------------------------------------ raw payloads
 
     def show(self, tmdb_id: int) -> dict:
         return self.get(f"/tv/{tmdb_id}", append_to_response="external_ids")
@@ -125,29 +140,16 @@ class TMDBClient:
     def season(self, tmdb_id: int, season_number: int) -> dict:
         return self.get(f"/tv/{tmdb_id}/season/{season_number}")
 
-    def movie(self, tmdb_id: int) -> dict:
-        return self.get(f"/movie/{tmdb_id}", append_to_response="external_ids")
-
-    def search(self, name: str, *, kind: Kind = Kind.SHOW, year: int | None = None) -> list[dict]:
-        """Raw search, for films — which have no port method until they have an importer."""
-        path = "/search/tv" if kind is Kind.SHOW else "/search/movie"
-        params: dict[str, str | int] = {"query": name}
-        if year is not None:
-            params["first_air_date_year" if kind is Kind.SHOW else "year"] = year
-        return self.get(path, **params).get("results") or []
-
-
-# --------------------------------------------------------------- translation
-
 
 def title_from_show(payload: dict) -> Title:
+    external_ids = payload.get("external_ids") or {}
     return Title(
         name=payload.get("name") or payload.get("original_name") or "",
         kind=Kind.SHOW,
         year=_year(payload.get("first_air_date")),
         tmdb_id=payload.get("id"),
-        tvdb_id=(payload.get("external_ids") or {}).get("tvdb_id"),
-        imdb_id=(payload.get("external_ids") or {}).get("imdb_id"),
+        tvdb_id=external_ids.get("tvdb_id"),
+        imdb_id=external_ids.get("imdb_id"),
         overview=payload.get("overview") or None,
         poster_path=payload.get("poster_path"),
         backdrop_path=payload.get("backdrop_path"),
@@ -156,22 +158,6 @@ def title_from_show(payload: dict) -> Title:
         last_air_date=payload.get("last_air_date") or None,
         total_episodes=payload.get("number_of_episodes"),
         runtime=_first(payload.get("episode_run_time")),
-    )
-
-
-def title_from_movie(payload: dict) -> Title:
-    return Title(
-        name=payload.get("title") or payload.get("original_title") or "",
-        kind=Kind.MOVIE,
-        year=_year(payload.get("release_date")),
-        tmdb_id=payload.get("id"),
-        imdb_id=payload.get("imdb_id") or (payload.get("external_ids") or {}).get("imdb_id"),
-        overview=payload.get("overview") or None,
-        poster_path=payload.get("poster_path"),
-        backdrop_path=payload.get("backdrop_path"),
-        air_status=payload.get("status"),
-        first_air_date=payload.get("release_date") or None,
-        runtime=payload.get("runtime"),
     )
 
 
@@ -193,11 +179,7 @@ def episodes_from_season(payload: dict) -> list[Episode]:
 
 
 def _match(payload: dict) -> CatalogMatch:
-    return CatalogMatch(
-        catalog_id=int(payload["id"]),
-        name=payload.get("name") or payload.get("original_name") or "",
-        year=_year(payload.get("first_air_date")),
-    )
+    return CatalogMatch(catalog_id=int(payload["id"]), year=_year(payload.get("first_air_date")))
 
 
 def _year(date: str | None) -> int | None:

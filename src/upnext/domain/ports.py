@@ -29,7 +29,6 @@ class CatalogMatch:
     """
 
     catalog_id: int
-    name: str = ""
     year: int | None = None
 
 
@@ -66,6 +65,8 @@ class Catalog(Protocol):
 
         Raises:
             CatalogError: the catalog could not serve it.
+            ConfigurationError: the catalog refused the credentials, which no
+                other title will fare better with.
         """
         ...
 
@@ -84,20 +85,16 @@ class WatchLibrary(Protocol):
 
     def record_watch(self, title_id: int, watch: Watch) -> None: ...
 
-    def upsert_episode(self, title_id: int, episode: Episode) -> int:
-        """Store one episode of the catalog's list."""
-        ...
+    def upsert_episode(self, title_id: int, episode: Episode) -> None: ...
 
-    def title_by_tmdb_id(self, tmdb_id: int) -> TitleRow | None:
-        """The stored title with this catalog id, if there is one."""
-        ...
+    def title_by_tmdb_id(self, tmdb_id: int) -> TitleRow | None: ...
 
     def move_watches(self, *, source_id: int, target_id: int, season: int, as_season: int) -> int:
-        """Reassign one source season's viewings to a different title."""
+        """Returns how many viewings moved."""
         ...
 
     def link_watches(self, title_id: int) -> int:
-        """Match this title's recorded viewings to the episodes just stored.
+        """Match this title's recorded viewings to its stored episodes.
 
         Returns how many found one. The rest are viewings of something the
         catalog's list does not contain, and keep the numbering the source gave

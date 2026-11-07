@@ -11,24 +11,26 @@ from __future__ import annotations
 import pytest
 
 from upnext.adapters.outbound.catalog.tmdb import TMDBClient
-from upnext.config.settings import load_settings
+from upnext.config.settings import Settings
 
 pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
 def client() -> TMDBClient:
-    settings = load_settings()
+    settings = Settings()
     if not settings.tmdb_api_key:
         pytest.skip("UPNEXT_TMDB_API_KEY is not set")
-    return TMDBClient(settings.tmdb_api_key, language=settings.tmdb_language)
+    return TMDBClient(
+        settings.tmdb_api_key, language=settings.tmdb_language, min_interval_seconds=settings.tmdb_min_interval_seconds
+    )
 
 
 def test_a_tvdb_id_from_the_export_resolves_to_the_right_show(client: TMDBClient) -> None:
     # 79168 is Friends' TheTVDB id, exactly as a TV Time export carries it.
     found = client.find_by_tvdb(79168)
     assert found is not None
-    assert (found.catalog_id, found.name, found.year) == (1668, "Friends", 1994)
+    assert (found.catalog_id, found.year) == (1668, 1994)
 
 
 def test_fetching_a_show_brings_back_its_episodes(client: TMDBClient) -> None:

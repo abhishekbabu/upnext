@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { airingDay, episodeCode, hours, poster, progressOf, shortDate, titleWithYear } from "@/lib/format";
+import { airingDay, episodeCode, hours, initials, poster, progressOf, shortDate } from "@/lib/format";
 
 const BASE = "https://image.tmdb.org/t/p";
 
@@ -27,10 +27,12 @@ describe("episodeCode", () => {
 });
 
 describe("progressOf", () => {
-  const title = (watched: number, unmatched: number, total: number | null) => ({
+  const ENRICHED = "2026-08-31T00:00:00+00:00";
+  const title = (watched: number, unmatched: number, total: number | null, enriched_at: string | null = ENRICHED) => ({
     episodes_watched: watched,
     unmatched_watched: unmatched,
     total_episodes: total,
+    enriched_at,
   });
 
   it("measures the watched share of TMDB's list", () => {
@@ -55,10 +57,16 @@ describe("progressOf", () => {
     });
   });
 
-  it("counts, rather than measures, a title with no catalog list yet", () => {
+  it("counts, rather than measures, a title TMDB has not been asked about", () => {
     // Unenriched: everything is unmatched only because there is nothing to
     // match against. Reporting that as a disagreement would be a lie.
-    expect(progressOf(title(0, 12, null))).toEqual({ kind: "counted", watched: 12 });
+    expect(progressOf(title(0, 12, null, null))).toEqual({ kind: "counted", watched: 12 });
+  });
+
+  it("never adds matched and unmatched together when TMDB gives no total", () => {
+    // Enriched, but TMDB has no episode count: the matched figure is the one
+    // that means something, and the rest are on the title page.
+    expect(progressOf(title(5, 3, null))).toEqual({ kind: "counted", watched: 5 });
   });
 
   it("draws no bar when TMDB has a list and nothing is on it", () => {
@@ -68,8 +76,8 @@ describe("progressOf", () => {
   });
 
   it("has nothing to say about a title nobody has watched", () => {
+    expect(progressOf(title(0, 0, null, null))).toEqual({ kind: "none" });
     expect(progressOf(title(0, 0, null))).toEqual({ kind: "none" });
-    expect(progressOf(title(0, 0, 0))).toEqual({ kind: "none" });
   });
 
   it("clamps when TMDB revises a count below what was matched against it", () => {
@@ -116,13 +124,6 @@ describe("hours", () => {
   });
 });
 
-describe("titleWithYear", () => {
-  it("appends the year when there is one", () => {
-    expect(titleWithYear("The Flash", 2014)).toBe("The Flash (2014)");
-    expect(titleWithYear("Friends", null)).toBe("Friends");
-  });
-});
-
 describe("airingDay", () => {
   const TODAY = "2026-09-01";
 
@@ -156,5 +157,30 @@ describe("airingDay", () => {
   it("says nothing about a date it cannot parse", () => {
     expect(airingDay("", TODAY)).toBe("");
     expect(airingDay("not-a-date", TODAY)).toBe("");
+  });
+});
+
+describe("initials", () => {
+  it("takes the first letter of the first two meaningful words", () => {
+    expect(initials("Armor Wars")).toBe("AW");
+    expect(initials("Avatar: The Last Airbender")).toBe("AL");
+  });
+
+  it("keeps a possessive as one word", () => {
+    // Splitting on the apostrophe leaves a stray "s" that becomes an initial:
+    // "Aegon's Conquest" read as AS rather than AC.
+    expect(initials("Aegon's Conquest")).toBe("AC");
+    expect(initials("Kuroko's Basketball")).toBe("KB");
+    expect(initials("Aegon’s Conquest")).toBe("AC");
+  });
+
+  it("drops leading articles, which would collide across half a shelf", () => {
+    expect(initials("The Office")).toBe("O");
+    expect(initials("The Last of Us")).toBe("LU");
+  });
+
+  it("always returns something, even for a name that is all punctuation", () => {
+    expect(initials("?")).toBe("?");
+    expect(initials("24")).toBe("2");
   });
 });

@@ -1,7 +1,7 @@
 """Reconstruct a library from a TV Time GDPR export.
 
 The export is a folder of CSVs dumped straight from TV Time's tables, with no
-schema and considerable redundancy. Four files carry everything upnext needs:
+schema and considerable redundancy. Five files carry everything upnext needs:
 
   tracking-prod-records-v2.csv  every episode watch, with a `key` prefixed
                                 "watch-episode" or "rewatch-episode". This is
@@ -28,8 +28,6 @@ from pathlib import Path
 
 from upnext.domain.errors import ExportError
 from upnext.domain.models import ImportedTitle, Kind, Status, Title, TitleState, Watch
-
-SOURCE = "tvtime"
 
 WATCH_RECORDS = "tracking-prod-records-v2.csv"
 FOLLOWED = "followed_tv_show.csv"
@@ -79,93 +77,6 @@ def _status_for(*, followed: dict[str, str] | None, for_later: bool, has_history
     return Status.STOPPED if has_history else Status.WATCHLIST
 
 
-def read_export(export_dir: Path | str) -> list[ImportedTitle]:
-    """Parse an export folder into titles the library can ingest.
-
-    Nothing here touches the network: an import is a pure translation of the
-    export, and TMDB only enters at enrichment.
-    """
-    export_dir = Path(export_dir)
-    if not export_dir.is_dir():
-        raise ExportError(f"{export_dir} is not a directory")
-    missing = [name for name in REQUIRED if not (export_dir / name).exists()]
-    if missing:
-        raise ExportError(f"{export_dir} is missing {', '.join(missing)} — is this a TV Time export?")
-
-    watches_by_show: dict[str, list[Watch]] = defaultdict(list)
-    names_from_watches: dict[str, str] = {}
-    for row in _rows(export_dir, WATCH_RECORDS):
-        key = row.get("key") or ""
-        if not key.startswith(("watch-episode", "rewatch-episode")):
-            continue
-        show_id = row.get("s_id")
-        season, number = _int(row.get("season_number")), _int(row.get("episode_number"))
-        if not show_id:
-            continue
-        if row.get("series_name"):
-            names_from_watches[show_id] = row["series_name"]
-        watches_by_show[show_id].append(
-            Watch(
-                watched_at=row["created_at"],
-                episode=_episode_ref(season, number),
-                is_rewatch=key.startswith("rewatch-episode"),
-                source=SOURCE,
-                source_episode_id=row.get("ep_id") or None,
-            )
-        )
-
-    followed = {row["tv_show_id"]: row for row in _rows(export_dir, FOLLOWED)}
-    show_data = {row["tv_show_id"]: row for row in _rows(export_dir, SHOW_DATA)}
-    ratings = {row["tv_show_id"]: _int(row.get("rating")) for row in _rows(export_dir, RATINGS)}
-
-    special = _rows(export_dir, SPECIAL_STATUS)
-    for_later = {row["tv_show_id"] for row in special if row.get("status") == "for_later"}
-    favorites = {row["tv_show_id"] for row in special if row.get("status") == "favorite"}
-
-    # Every file that mentions a show also names it, and a watchlist entry is
-    # often mentioned nowhere else, so names are collected from all of them.
-    names = {**names_from_watches, **_collect_names(export_dir, followed, show_data, special)}
-
-    # A show can appear in any of these files independently, so the set of
-    # shows to import is their union rather than any one file's rows.
-    show_ids = set(watches_by_show) | set(followed) | set(show_data) | for_later | favorites | set(ratings)
-
-    imported: list[ImportedTitle] = []
-    for show_id in sorted(show_ids, key=int):
-        name = names.get(show_id)
-        if name is None:
-            continue
-        watches = sorted(watches_by_show.get(show_id, []), key=lambda w: w.watched_at)
-        base_name, year = _split_year(name)
-        follow_row = followed.get(show_id)
-
-        rating = ratings.get(show_id)
-        reported = _int((show_data.get(show_id) or {}).get("nb_episodes_seen"))
-        imported.append(
-            ImportedTitle(
-                title=Title(name=base_name, kind=Kind.SHOW, year=year, tvdb_id=int(show_id)),
-                state=TitleState(
-                    status=_status_for(
-                        followed=follow_row,
-                        for_later=show_id in for_later,
-                        # A seen count with no per-episode rows still counts as
-                        # history: TV Time keeps the tally after it drops the
-                        # detail, and those shows were watched, not wishlisted.
-                        has_history=bool(watches) or bool(reported),
-                    ),
-                    is_favorite=show_id in favorites,
-                    # TV Time rated out of 5; upnext keeps a 10-point scale so
-                    # half-star precision is available later without a migration.
-                    rating=rating * 2 if rating else None,
-                    reported_watched=reported,
-                    followed_at=(follow_row or {}).get("created_at") or None,
-                ),
-                watches=watches,
-            )
-        )
-    return imported
-
-
 def _episode_ref(season: int | None, number: int | None) -> tuple[int, int] | None:
     """Which episode a watch is of, or None when the export does not say.
 
@@ -178,27 +89,6 @@ def _episode_ref(season: int | None, number: int | None) -> tuple[int, int] | No
     if season is None or number is None or number < 1:
         return None
     return (season, number)
-
-
-def _collect_names(
-    export_dir: Path,
-    followed: dict[str, dict],
-    show_data: dict[str, dict],
-    special: list[dict[str, str]],
-) -> dict[str, str]:
-    names: dict[str, str] = {}
-    sources: list[list[dict[str, str]]] = [
-        _rows(export_dir, RATINGS),
-        special,
-        list(show_data.values()),
-        list(followed.values()),
-    ]
-    for rows in sources:
-        for row in rows:
-            name = row.get("tv_show_name")
-            if name and row.get("tv_show_id"):
-                names[row["tv_show_id"]] = name
-    return names
 
 
 def _split_year(name: str) -> tuple[str, int | None]:
@@ -217,13 +107,98 @@ def _split_year(name: str) -> tuple[str, int | None]:
 
 
 class TVTimeExport:
-    """The `ImportSource` port over a TV Time GDPR export.
-
-    A class rather than the bare function so that another service is a registry
-    entry in `bootstrap` rather than a branch at the call site.
-    """
+    """The `ImportSource` port over a TV Time GDPR export."""
 
     name = "tvtime"
+    """Both what the user selects it by and the `source` stamped on every watch it reads."""
 
     def read(self, export_dir: Path) -> list[ImportedTitle]:
-        return read_export(export_dir)
+        """Parse an export folder into titles the library can ingest.
+
+        Nothing here touches the network: an import is a pure translation of the
+        export, and TMDB only enters at enrichment.
+        """
+        if not export_dir.is_dir():
+            raise ExportError(f"{export_dir} is not a directory")
+        missing = [name for name in REQUIRED if not (export_dir / name).exists()]
+        if missing:
+            raise ExportError(f"{export_dir} is missing {', '.join(missing)} — is this a TV Time export?")
+
+        watches_by_show: dict[str, list[Watch]] = defaultdict(list)
+        names_from_watches: dict[str, str] = {}
+        for row in _rows(export_dir, WATCH_RECORDS):
+            key = row.get("key") or ""
+            if not key.startswith(("watch-episode", "rewatch-episode")):
+                continue
+            show_id = row.get("s_id")
+            season, number = _int(row.get("season_number")), _int(row.get("episode_number"))
+            if not show_id:
+                continue
+            if row.get("series_name"):
+                names_from_watches[show_id] = row["series_name"]
+            watches_by_show[show_id].append(
+                Watch(
+                    watched_at=row["created_at"],
+                    episode=_episode_ref(season, number),
+                    is_rewatch=key.startswith("rewatch-episode"),
+                    source=self.name,
+                    source_episode_id=row.get("ep_id") or None,
+                )
+            )
+
+        followed_rows = _rows(export_dir, FOLLOWED)
+        show_data_rows = _rows(export_dir, SHOW_DATA)
+        rating_rows = _rows(export_dir, RATINGS)
+        special = _rows(export_dir, SPECIAL_STATUS)
+
+        followed = {row["tv_show_id"]: row for row in followed_rows}
+        show_data = {row["tv_show_id"]: row for row in show_data_rows}
+        ratings = {row["tv_show_id"]: _int(row.get("rating")) for row in rating_rows}
+        for_later = {row["tv_show_id"] for row in special if row.get("status") == "for_later"}
+        favorites = {row["tv_show_id"] for row in special if row.get("status") == "favorite"}
+
+        # Every file that mentions a show also names it, and a watchlist entry is
+        # often mentioned nowhere else, so names are collected from all of them.
+        names = dict(names_from_watches)
+        for row in (*rating_rows, *special, *show_data_rows, *followed_rows):
+            if row.get("tv_show_name") and row.get("tv_show_id"):
+                names[row["tv_show_id"]] = row["tv_show_name"]
+
+        # A show can appear in any of these files independently, so the set of
+        # shows to import is their union rather than any one file's rows.
+        show_ids = set(watches_by_show) | set(followed) | set(show_data) | for_later | favorites | set(ratings)
+
+        imported: list[ImportedTitle] = []
+        for show_id in sorted(show_ids, key=int):
+            name = names.get(show_id)
+            if name is None:
+                continue
+            watches = sorted(watches_by_show.get(show_id, []), key=lambda w: w.watched_at)
+            base_name, year = _split_year(name)
+            follow_row = followed.get(show_id)
+
+            rating = ratings.get(show_id)
+            reported = _int((show_data.get(show_id) or {}).get("nb_episodes_seen"))
+            imported.append(
+                ImportedTitle(
+                    title=Title(name=base_name, kind=Kind.SHOW, year=year, tvdb_id=int(show_id)),
+                    state=TitleState(
+                        status=_status_for(
+                            followed=follow_row,
+                            for_later=show_id in for_later,
+                            # A seen count with no per-episode rows still counts as
+                            # history: TV Time keeps the tally after it drops the
+                            # detail, and those shows were watched, not wishlisted.
+                            has_history=bool(watches) or bool(reported),
+                        ),
+                        is_favorite=show_id in favorites,
+                        # TV Time rated out of 5; upnext keeps a 10-point scale so
+                        # half-star precision is available later without a migration.
+                        rating=rating * 2 if rating else None,
+                        reported_watched=reported,
+                        followed_at=(follow_row or {}).get("created_at") or None,
+                    ),
+                    watches=watches,
+                )
+            )
+        return imported

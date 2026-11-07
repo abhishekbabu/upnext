@@ -15,12 +15,14 @@ class Status(StrEnum):
     """Where a title sits for the user.
 
     Deliberately four buckets and no "unwatched": a title with no relationship
-    to the user has no state row at all.
+    to the user has no state row at all. Declared in the order a library is
+    read — what you are on, then the rest — which is the order every count of
+    them is listed in.
     """
 
     WATCHING = "watching"
-    COMPLETED = "completed"
     WATCHLIST = "watchlist"
+    COMPLETED = "completed"
     STOPPED = "stopped"
 
 
@@ -52,7 +54,6 @@ class Episode:
     runtime: int | None = None
     still_path: str | None = None
     tmdb_id: int | None = None
-    tvdb_id: int | None = None
 
 
 @dataclass(slots=True)
@@ -198,3 +199,41 @@ class UnmatchedWatch:
     episode_number: int
     watch_count: int
     last_watched_at: str | None = None
+
+
+@dataclass(slots=True)
+class ShelfEpisode:
+    """One episode of one show, named the way a shelf lists it.
+
+    What both `up_next` and `airing_next` return. The two stay separate
+    questions — a backlog and a schedule — but an episode beside its show's
+    name and artwork is the same thing in either.
+    """
+
+    title_id: int
+    name: str
+    poster_path: str | None
+    episode_id: int
+    season_number: int
+    episode_number: int
+    episode_name: str | None
+    air_date: str | None
+    last_watched_at: str | None
+
+
+@dataclass(slots=True)
+class LibraryStats:
+    watches: int
+    episodes_watched: int
+    """An episode is one episode whether the catalog lists it or not: a matched
+    one counts by its id, an unmatched one by what the source called it. A
+    watch the export declined to number counts as a viewing only."""
+
+    titles_watched: int
+    first_watch: str | None
+    last_watch: str | None
+    known_minutes: int
+    """A floor, not a total: only enriched episodes carry a runtime."""
+
+    by_status: dict[Status, int]
+    """In `Status` order, statuses with no titles left out."""

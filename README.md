@@ -170,10 +170,10 @@ name search and a hope.
 
 | Route | What it returns |
 | --- | --- |
-| `GET /api/titles?status=&kind=` | the library, with counted progress per title |
+| `GET /api/titles?status=` | the library, with counted progress per title |
 | `GET /api/titles/{id}` | one title, its episodes with watch counts, and any viewings TMDB cannot account for |
 | `GET /api/up-next` | the next unwatched episode of everything in progress |
-| `GET /api/airing` | episodes airing today or later, of shows with watch history, soonest first |
+| `GET /api/airing` | episodes airing today or later, of shows with watch history, soonest first, and the day "today" was |
 | `GET /api/stats` | episodes, titles, date range, runtime, counts by status |
 | `GET /api/config` | the TMDB image base the client builds poster URLs from |
 
@@ -205,10 +205,11 @@ just web       # Vite on :5173, proxying /api across to it
 
 ```
 web/src/
-  lib/api.ts        the client, typed against the wire models in api.py
+  lib/api.ts        the client; its types come from schema.d.ts
+  lib/schema.d.ts   generated from openapi.json by `just api-types` — never edited
   lib/format.ts     posters, episode codes, progress, dates — pure and tested
   lib/queries.ts    every query and its cache key
-  components/ui/    poster, progress bar, status badge, loading/empty/error
+  components/ui/    shelf, poster, progress bar, status badge, loading/empty/error
   panels/           UpNext, Library, Title, Stats — one per route
 ```
 
@@ -223,6 +224,7 @@ on the entry bundle, because everything in it is time the page is blank.
 ```sh
 just check              # lint, types, agent docs, tests, coverage floor — what CI runs
 just check-web          # the front end: lint, types, tests, build
+just api-types          # regenerate the client's types after changing a wire model
 just fmt                # ruff fix + format
 just test               # the hermetic suite: no network, no key needed
 just test-integration   # the tests that call TMDB (need a key)
@@ -237,6 +239,7 @@ src/upnext/
     models.py            Title, Episode, Watch, Status — what everything speaks
     errors.py            every failure upnext raises on purpose
     ports.py             Catalog, WatchLibrary, ImportSource
+    matching.py          which catalog episode each viewing is of
   application/         the use cases, working against ports only
     enrichment.py        resolve a title against a catalog, fill in the data
     importing.py         read an export, write a library

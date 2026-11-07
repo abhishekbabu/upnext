@@ -9,17 +9,13 @@ key missing, is the library empty, or is something actually broken? Reads only
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from upnext.adapters.outbound.store.db import connect
-from upnext.adapters.outbound.store.library import Library
-from upnext.config.settings import PROJECT_ROOT, Settings, load_settings
+from upnext.adapters.outbound.store.library import open_library
+from upnext.config.settings import PROJECT_ROOT, Settings
 
 OK = "✓"
 MISSING = "·"
 
-# Every environment variable settings.py understands, with the prefix stripped.
-KNOWN_KEYS = {f"UPNEXT_{name.upper()}" for name in Settings.model_fields}
+KNOWN_KEYS = {f"{Settings.model_config['env_prefix']}{name}".upper() for name in Settings.model_fields}
 
 
 def check_env_file() -> list[str]:
@@ -55,23 +51,19 @@ def check_key(settings: Settings) -> str:
 
 
 def check_library(settings: Settings) -> list[str]:
-    path = Path(settings.db_path).expanduser()
+    path = settings.db_path
     if not path.exists():
         return [f"{MISSING} no library at {path} — run `upnext import <export-dir>`"]
 
-    conn = connect(path)
-    try:
-        library = Library(conn)
+    with open_library(path) as library:
         total = library.count_titles()
         pending = len(library.needing_enrichment())
-        stats = library.stats()
-    finally:
-        conn.close()
+        watches = library.stats().watches
 
     if total == 0:
         return [f"{MISSING} library at {path} is empty — run `upnext import <export-dir>`"]
 
-    lines = [f"{OK} library at {path}: {total} titles, {stats['watches']} watches"]
+    lines = [f"{OK} library at {path}: {total} titles, {watches} watches"]
     if pending:
         lines.append(f"  {MISSING} {pending} titles not yet enriched — run `upnext enrich`")
     else:
@@ -80,7 +72,7 @@ def check_library(settings: Settings) -> list[str]:
 
 
 def main() -> int:
-    settings = load_settings()
+    settings = Settings()
     print("upnext doctor\n")
     for line in check_env_file():
         print(line)

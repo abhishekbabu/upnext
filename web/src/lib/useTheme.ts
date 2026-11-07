@@ -30,24 +30,28 @@ function safeWrite(key: string, value: string): void {
   }
 }
 
+function apply(mode: Mode): void {
+  document.documentElement.classList.toggle("dark", mode === "dark");
+}
+
 export function useTheme() {
   const [mode, setModeState] = useState<Mode>(currentMode);
 
   const setMode = useCallback((next: Mode) => {
-    document.documentElement.classList.toggle("dark", next === "dark");
-    document.documentElement.classList.toggle("light", next !== "dark");
+    apply(next);
     setModeState(next);
     safeWrite(MODE_STORAGE_KEY, next);
   }, []);
 
-  // Follow the OS only while the user has expressed no preference of their own.
+  // Follow the OS only while the user has expressed no preference of their own,
+  // which they can do at any point after the page loads.
   useEffect(() => {
-    if (safeRead(MODE_STORAGE_KEY)) return;
     const query = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = (e: MediaQueryListEvent) => {
-      document.documentElement.classList.toggle("dark", e.matches);
-      document.documentElement.classList.toggle("light", !e.matches);
-      setModeState(e.matches ? "dark" : "light");
+      if (safeRead(MODE_STORAGE_KEY)) return;
+      const next = e.matches ? "dark" : "light";
+      apply(next);
+      setModeState(next);
     };
     query.addEventListener("change", onChange);
     return () => query.removeEventListener("change", onChange);

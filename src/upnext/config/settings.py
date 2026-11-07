@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# The repo root, three levels up from src/upnext/config/settings.py. The .env
-# is found by absolute path rather than by name so that `upnext` picks it up
-# wherever it is run from, not only from the project directory.
+# The .env is found by absolute path rather than by name so that `upnext` picks
+# it up wherever it is run from, not only from the project directory.
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 DEFAULT_DB_PATH = Path.home() / ".upnext" / "library.db"
@@ -42,6 +41,8 @@ class Settings(BaseSettings):
     host: str = Field(default="127.0.0.1")
     port: int = Field(default=8000)
 
-
-def load_settings() -> Settings:
-    return Settings()
+    @field_validator("db_path")
+    @classmethod
+    def _expand_home(cls, path: Path) -> Path:
+        # A shell expands `~` on the command line, but not inside .env.
+        return path.expanduser()
