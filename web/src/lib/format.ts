@@ -52,7 +52,7 @@ export type Progress =
   /** Watched, with no catalog total to measure against. */
   | { kind: "counted"; watched: number }
   /** Matched to TMDB's list, so a bar means what it looks like. */
-  | { kind: "measured"; watched: number; total: number; share: number; unmatched: number }
+  | { kind: "measured"; watched: number; total: number; share: number }
   /**
    * TMDB has answered and not one viewing is on its list. A 0% bar beside 320
    * watched episodes would be true and would read as "not started", so there
@@ -65,15 +65,14 @@ export function progressOf(
 ): Progress {
   const { episodes_watched: watched, unmatched_watched: unmatched, total_episodes: total } = title;
 
-  // After enrichment the two counts are different statements and are never
-  // added together.
   if (!title.enriched_at) return unmatched > 0 ? { kind: "unenriched", watched: unmatched } : { kind: "none" };
+  // From here the two counts are different statements and are never added.
   if (watched === 0 && unmatched > 0) return { kind: "unmatched", unmatched, total };
   if (!total) return watched > 0 ? { kind: "counted", watched } : { kind: "none" };
 
   // Clamped: TMDB revises episode counts downward as contributors edit, and a
   // list that shrinks below what was matched against it should read as done.
-  return { kind: "measured", watched, total, share: Math.min(watched / total, 1), unmatched };
+  return { kind: "measured", watched, total, share: Math.min(watched / total, 1) };
 }
 
 /**

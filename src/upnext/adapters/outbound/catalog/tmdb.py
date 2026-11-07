@@ -32,6 +32,15 @@ class _RateLimited(RetryableCatalogError):
         self.retry_after = retry_after
 
 
+def _seconds(retry_after: str | None) -> float:
+    """Retry-After as seconds. HTTP also allows a date there; TMDB sends seconds,
+    and anything else waits one."""
+    try:
+        return float(retry_after or 1)
+    except ValueError:
+        return 1.0
+
+
 def _backoff(state: RetryCallState) -> float:
     exc = state.outcome.exception() if state.outcome else None
     return exc.retry_after if isinstance(exc, _RateLimited) else _exponential(state)
@@ -83,9 +92,11 @@ class TMDBClient:
             response = self.session.get(f"{BASE_URL}{path}", params=query, timeout=TIMEOUT_SECONDS)
         except (requests.Timeout, requests.ConnectionError) as exc:
             raise RetryableCatalogError(str(exc)) from exc
+        except requests.RequestException as exc:
+            raise CatalogError(f"TMDB request for {path} failed: {exc}") from exc
 
         if response.status_code == 429:
-            raise _RateLimited(float(response.headers.get("Retry-After", "1")))
+            raise _RateLimited(_seconds(response.headers.get("Retry-After")))
         if response.status_code >= 500:
             raise RetryableCatalogError(f"TMDB {response.status_code} for {path}")
         if response.status_code == 401:
@@ -97,7 +108,10 @@ class TMDBClient:
             raise CatalogError(f"TMDB has nothing at {path}")
         if not response.ok:
             raise CatalogError(f"TMDB {response.status_code} for {path}: {response.text[:200]}")
-        return response.json()
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise CatalogError(f"TMDB sent {path} as something other than JSON") from exc
 
     def find_by_tvdb(self, tvdb_id: int) -> CatalogMatch | None:
         results = self.get("/find/" + str(tvdb_id), external_source="tvdb_id").get("tv_results") or []

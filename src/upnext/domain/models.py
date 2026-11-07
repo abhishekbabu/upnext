@@ -234,7 +234,7 @@ class ShelfEpisode:
 @dataclass(slots=True)
 class LibraryStats:
     watches: int
-    episodes_watched: int
+    distinct_episodes: int
     """An episode is one episode whether the catalog lists it or not: a matched
     one counts by its id, an unmatched one by what the source called it. A
     watch the export declined to number counts as a viewing only."""
@@ -243,7 +243,8 @@ class LibraryStats:
     first_watch: str | None
     last_watch: str | None
     known_minutes: int
-    """A floor, not a total: only enriched episodes carry a runtime."""
+    """A floor, not a total: a viewing counts its episode's runtime, or the show's
+    typical one, and neither is known before enrichment."""
 
     by_status: dict[Status, int]
     """In `Status` order, statuses with no titles left out."""

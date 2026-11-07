@@ -116,41 +116,17 @@
       "get": {
         "summary": "Up Next",
         "operationId": "up_next_api_up_next_get",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
-              "default": 100,
-              "title": "Limit"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/UpNextItem"
                   },
+                  "type": "array",
                   "title": "Response Up Next Api Up Next Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -162,20 +138,6 @@
       "get": {
         "summary": "Airing",
         "operationId": "airing_api_airing_get",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
-              "default": 100,
-              "title": "Limit"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -183,16 +145,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Airing"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -340,9 +292,10 @@
             "type": "integer",
             "title": "Watches"
           },
-          "episodes_watched": {
+          "distinct_episodes": {
             "type": "integer",
-            "title": "Episodes Watched"
+            "title": "Distinct Episodes",
+            "description": "History, not progress: matched and unmatched, specials included."
           },
           "titles_watched": {
             "type": "integer",
@@ -373,7 +326,7 @@
           "known_minutes": {
             "type": "integer",
             "title": "Known Minutes",
-            "description": "A floor, not a total: only enriched episodes carry a runtime."
+            "description": "A floor, not a total: nothing has a runtime before enrichment."
           },
           "by_status": {
             "additionalProperties": {
@@ -389,7 +342,7 @@
         "type": "object",
         "required": [
           "watches",
-          "episodes_watched",
+          "distinct_episodes",
           "titles_watched",
           "first_watch",
           "last_watch",
@@ -471,7 +424,7 @@
           "unmatched_watched": {
             "type": "integer",
             "title": "Unmatched Watched",
-            "description": "Distinct episodes watched that TMDB's list does not contain, counted by\nwhat the export called them. Real viewings of something TMDB numbers\ndifferently \u2014 the two together are the whole history."
+            "description": "Distinct episodes watched that TMDB's list does not contain, specials\nincluded, counted by what the export called them. Real viewings of something TMDB numbers\ndifferently \u2014 the two together are the whole history."
           },
           "enriched_at": {
             "anyOf": [
@@ -669,7 +622,7 @@
           "unmatched_watched": {
             "type": "integer",
             "title": "Unmatched Watched",
-            "description": "Distinct episodes watched that TMDB's list does not contain, counted by\nwhat the export called them. Real viewings of something TMDB numbers\ndifferently \u2014 the two together are the whole history."
+            "description": "Distinct episodes watched that TMDB's list does not contain, specials\nincluded, counted by what the export called them. Real viewings of something TMDB numbers\ndifferently \u2014 the two together are the whole history."
           },
           "enriched_at": {
             "anyOf": [

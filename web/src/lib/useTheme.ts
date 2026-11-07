@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type Mode = "light" | "dark";
+type Mode = "light" | "dark";
 
 const MODE_STORAGE_KEY = "upnext:mode";
 

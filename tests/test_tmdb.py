@@ -192,3 +192,21 @@ def test_episodes_without_numbering_are_dropped() -> None:
         }
     )
     assert [(e.season_number, e.episode_number, e.name) for e in episodes] == [(1, 1, "Pilot")]
+
+
+def test_a_retry_after_given_as_a_date_waits_a_second(monkeypatch) -> None:
+    waits: list[float] = []
+    monkeypatch.setattr(TMDBClient.get.retry, "sleep", waits.append)
+    stamp = "Wed, 21 Oct 2026 07:28:00 GMT"
+    session = FakeSession(FakeResponse(429, headers={"Retry-After": stamp}), FakeResponse(payload={"id": 1}))
+    assert client(session).show(1) == {"id": 1}
+    assert waits == [1.0]
+
+
+def test_a_reply_that_is_not_json_is_a_catalog_error() -> None:
+    class NotJson(FakeResponse):
+        def json(self) -> dict:
+            raise ValueError("Expecting value")
+
+    with pytest.raises(CatalogError, match="other than JSON"):
+        client(FakeSession(NotJson())).show(1)

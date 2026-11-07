@@ -57,7 +57,7 @@ def test_a_module_imports_only_from_the_layers_below_it(module: Path) -> None:
 
 
 def test_only_inbound_adapters_write_to_a_stream() -> None:
-    """`print` outside inbound writes over the CLI's output or into a server log nobody reads."""
+    """`print` or `sys.exit` outside inbound writes over the CLI's output or ends a request mid-flight."""
     offenders = []
     for module in modules():
         relative = module.relative_to(SRC)
@@ -67,4 +67,6 @@ def test_only_inbound_adapters_write_to_a_stream() -> None:
         for node in ast.walk(ast.parse(source)):
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print":
                 offenders.append(f"{relative}:{node.lineno} print")
+            if isinstance(node, ast.Attribute) and node.attr == "exit" and getattr(node.value, "id", None) == "sys":
+                offenders.append(f"{relative}:{node.lineno} sys.exit")
     assert not offenders, offenders

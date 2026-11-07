@@ -131,7 +131,7 @@ export function Title() {
                       {episode.watch_count > 0 && (
                         <span className="inline-flex items-center gap-1 font-mono text-[10.5px] text-ok">
                           <Check className="size-3.5" aria-hidden />
-                          {episode.watch_count > 1 ? `×${episode.watch_count}` : ""}
+                          <span aria-hidden>{episode.watch_count > 1 ? `×${episode.watch_count}` : ""}</span>
                           <span className="sr-only">
                             watched {episode.watch_count} {episode.watch_count === 1 ? "time" : "times"}
                           </span>

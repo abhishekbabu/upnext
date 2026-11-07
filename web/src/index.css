@@ -33,10 +33,10 @@
   --color-border: light-dark(#eaeaea, #2e2e2e);
   --color-ring: light-dark(#0070f3, #52a8ff);
 
-  /* Status colors are shared by both modes' intent and picked to survive
-     red-green color blindness: `ok` is a cool bluish-green and `destructive`
-     stays a warm red, so watched-versus-unwatched reads as a warm/cool
-     contrast rather than a hue difference that CVD collapses. */
+  /* `ok` marks what is watched and finished, `destructive` a failure. Picked
+     to survive red-green color blindness: `ok` is a cool bluish-green and
+     `destructive` a warm red, a warm/cool contrast rather than a hue
+     difference that CVD collapses. */
   --color-ok: light-dark(#00745a, #2dd4a7);
 
   /* The ground a poster sits on, deliberately the same in both modes. TMDB

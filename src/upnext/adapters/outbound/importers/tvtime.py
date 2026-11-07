@@ -123,6 +123,14 @@ class TVTimeExport:
         missing = [name for name in REQUIRED if not (export_dir / name).exists()]
         if missing:
             raise ExportError(f"{export_dir} is missing {', '.join(missing)} — is this a TV Time export?")
+        try:
+            return self._parse(export_dir)
+        except (KeyError, ValueError) as exc:
+            # A column renamed or a show id that is not a number: TV Time
+            # changed its format, or this is not its export.
+            raise ExportError(f"{export_dir} does not read as a TV Time export: {exc!r}") from exc
+
+    def _parse(self, export_dir: Path) -> list[ImportedTitle]:
 
         watches_by_show: dict[str, list[Watch]] = defaultdict(list)
         names_from_watches: dict[str, str] = {}

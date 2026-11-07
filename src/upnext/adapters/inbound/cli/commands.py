@@ -85,6 +85,13 @@ def serve(args: argparse.Namespace, settings: Settings) -> None:
     uvicorn.run(app, host=args.host or settings.host, port=args.port or settings.port)
 
 
+def _positive(value: str) -> int:
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"must be 1 or more, not {value}")
+    return number
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="upnext", description="A personal TV and film watch tracker.")
     parser.add_argument("--db", type=Path, help=f"Library path (default: {DEFAULT_DB_PATH})")
@@ -101,7 +108,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_import.set_defaults(func=in_library(cmd_import))
 
     p_enrich = sub.add_parser("enrich", help="Resolve imported titles against TMDB")
-    p_enrich.add_argument("--limit", type=int, default=None, help="Only enrich the first N titles")
+    p_enrich.add_argument("--limit", type=_positive, default=None, help="Only enrich the first N titles")
     p_enrich.set_defaults(func=in_library(cmd_enrich))
 
     p_move = sub.add_parser(

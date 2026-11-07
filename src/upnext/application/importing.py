@@ -34,7 +34,10 @@ def summarize(imported: list[ImportedTitle]) -> ImportSummary:
 
 
 def import_export(source: ImportSource, library: WatchLibrary, export_dir: Path) -> ImportSummary:
-    """Read an export and write all of it, returning what was written.
+    """Read an export and write all of it, returning what the export holds.
+
+    What it holds, not what changed: a re-import writes nothing and reports
+    the same figures.
 
     Raises:
         ExportError: the folder is not an export this source recognises.
