@@ -60,8 +60,7 @@ def resolve_show(catalog: Catalog, title: TitleRow) -> int | None:
 
 def _store_show(library: WatchLibrary, title_id: int, show: CatalogShow) -> None:
     library.apply_enrichment(title_id, show.title, enriched_at=datetime.now(UTC).isoformat(timespec="seconds"))
-    for episode in show.episodes:
-        library.upsert_episode(title_id, episode)
+    library.replace_episodes(title_id, show.episodes, keep_seasons=show.unserved)
 
 
 def enrich_title(catalog: Catalog, library: WatchLibrary, title: TitleRow) -> bool:

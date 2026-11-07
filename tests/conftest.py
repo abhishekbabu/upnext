@@ -245,8 +245,10 @@ class FakeCatalog:
         search_results: list[CatalogMatch] | None = None,
         title: Title | None = None,
         episodes: list[Episode] | None = None,
+        unserved: set[int] | None = None,
     ) -> None:
         self.found = found
+        self.unserved = unserved or set()
         self.search_results = search_results or []
         self.title = title or FRIENDS
         self.episodes = FRIENDS_EPISODES if episodes is None else episodes
@@ -260,7 +262,7 @@ class FakeCatalog:
         return self.search_results
 
     def fetch_show(self, catalog_id: int) -> CatalogShow:
-        return CatalogShow(title=self.title, episodes=self.episodes)
+        return CatalogShow(title=self.title, episodes=self.episodes, unserved=self.unserved)
 
 
 def one_show(name: str, tmdb_id: int, episodes: list[tuple[int, int]]) -> FakeCatalog:

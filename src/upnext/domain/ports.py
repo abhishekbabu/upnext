@@ -43,6 +43,9 @@ class CatalogShow:
 
     title: Title
     episodes: list[Episode] = field(default_factory=list)
+    unserved: set[int] = field(default_factory=set)
+    """Seasons the catalog lists but could not serve this time. What the
+    library already has for them stands."""
 
 
 class Catalog(Protocol):
@@ -85,7 +88,9 @@ class WatchLibrary(Protocol):
 
     def record_watch(self, title_id: int, watch: Watch) -> None: ...
 
-    def upsert_episode(self, title_id: int, episode: Episode) -> None: ...
+    def replace_episodes(self, title_id: int, episodes: list[Episode], *, keep_seasons: set[int]) -> None:
+        """Make the stored episode list the catalog's, leaving `keep_seasons` as they are."""
+        ...
 
     def title(self, title_id: int) -> TitleRow | None: ...
 

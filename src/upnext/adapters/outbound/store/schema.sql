@@ -28,8 +28,7 @@ CREATE TABLE IF NOT EXISTS titles (
     total_episodes INTEGER,
     runtime        INTEGER,
 
-    enriched_at    TEXT,
-    created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+    enriched_at    TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS titles_tvdb ON titles (kind, tvdb_id) WHERE tvdb_id IS NOT NULL;
@@ -125,8 +124,7 @@ CREATE TABLE IF NOT EXISTS title_state (
     -- shows whose per-episode rows it no longer has. Where the two disagree,
     -- the watches table is what the UI counts and this is the footnote.
     reported_watched    INTEGER,
-    followed_at         TEXT,
-    updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+    followed_at         TEXT
 );
 
 CREATE INDEX IF NOT EXISTS title_state_status ON title_state (status);
