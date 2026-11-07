@@ -11,13 +11,13 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AiringItem, Stats, TitleDetail, TitleSummary, UpNextItem } from "@/lib/api";
+import type { Airing, AiringItem, Config, Stats, TitleDetail, TitleSummary, UpNextItem } from "@/lib/api";
 import { Library } from "@/panels/Library";
 import { Stats as StatsPanel } from "@/panels/Stats";
 import { Title as TitlePanel } from "@/panels/Title";
 import { UpNext } from "@/panels/UpNext";
 
-const CONFIG = { image_base: "https://image.tmdb.org/t/p" };
+const CONFIG: Config = { image_base: "https://image.tmdb.org/t/p" };
 
 const FRIENDS: TitleSummary = {
   id: 1,
@@ -68,16 +68,16 @@ const LASSO: AiringItem = {
 };
 
 /** Two episodes a week apart, so they group as two days rather than one. */
-const AIRING = {
+const AIRING: Airing = {
   today: TODAY,
   episodes: [LASSO, { ...LASSO, episode_id: 902, episode_number: 6, episode_name: null, air_date: "2099-01-08" }],
 };
 
-const NOTHING_AIRING = { today: TODAY, episodes: [] };
+const NOTHING_AIRING: Airing = { today: TODAY, episodes: [] };
 
 const STATS: Stats = {
   watches: 4471,
-  episodes_watched: 4240,
+  distinct_episodes: 4240,
   titles_watched: 123,
   first_watch: "2017-02-18 20:17:55",
   last_watch: "2026-07-06 05:27:04",
@@ -238,13 +238,21 @@ describe("Library", () => {
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("100");
   });
 
-  it("shows a bare count, and no bar, for a title with no catalog count", async () => {
+  it("shows a bare count, and no bar, for a title TMDB has not been asked about", async () => {
     // The denominator is what a bar needs. Without one, claiming 100% because
     // every known episode is watched would be a lie about an unenriched show.
     stubFetch({ "/api/titles": [UNENRICHED] });
     draw(<Library />);
 
     expect(await screen.findByText("3 watched · not enriched")).toBeTruthy();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+  });
+
+  it("counts without measuring when TMDB lists no total", async () => {
+    stubFetch({ "/api/titles": [{ ...FRIENDS, episodes_watched: 12, total_episodes: null }] });
+    draw(<Library />);
+
+    expect(await screen.findByText("12 watched")).toBeTruthy();
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
@@ -273,7 +281,7 @@ describe("Library", () => {
     });
     draw(<Library />);
 
-    expect(await screen.findByText("320 watched")).toBeTruthy();
+    expect(await screen.findByText("320 watched · none on TMDB’s list")).toBeTruthy();
     expect(screen.queryByRole("progressbar")).toBeNull();
   });
 

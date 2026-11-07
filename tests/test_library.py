@@ -48,7 +48,7 @@ def test_up_next_is_the_lowest_unwatched_episode_and_skips_specials(library: Lib
     library.record_watch(title_id, Watch(watched_at="2020-01-03 00:00:00", episode=(1, 3)))
     library.link_watches(title_id)
 
-    (row,) = library.up_next(limit=10)
+    (row,) = library.up_next()
     assert (row.season_number, row.episode_number) == (1, 2)
 
 
@@ -56,7 +56,7 @@ def test_up_next_ignores_titles_that_are_not_being_watched(library: Library) -> 
     title_id = a_show(library)
     library.set_state(title_id, TitleState(status=Status.COMPLETED))
     library.upsert_episode(title_id, Episode(season_number=1, episode_number=1))
-    assert library.up_next(limit=10) == []
+    assert library.up_next() == []
 
 
 def test_titles_can_be_filtered_by_status(library: Library) -> None:
@@ -154,7 +154,7 @@ def test_airing_next_starts_at_today_and_leaves_yesterday_behind(library: Librar
     library.upsert_episode(title_id, Episode(season_number=1, episode_number=2, air_date=TODAY))
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
 
-    airing = library.airing_next(TODAY, limit=10)
+    airing = library.airing_next(TODAY)
     assert [row.air_date for row in airing] == [TODAY]
 
 
@@ -169,7 +169,7 @@ def test_airing_next_covers_shows_watched_whatever_their_status(library: Library
     library.upsert_episode(stopped, Episode(season_number=4, episode_number=5, air_date="2026-07-01"))
     library.record_watch(stopped, Watch(watched_at="2023-01-01 00:00:00", episode=(1, 1)))
 
-    airing = library.airing_next(TODAY, limit=10)
+    airing = library.airing_next(TODAY)
     assert [row.name for row in airing] == ["Ted Lasso"]
 
 
@@ -183,7 +183,7 @@ def test_airing_next_ignores_a_show_never_watched(library: Library) -> None:
     library.set_state(unwatched, TitleState(status=Status.WATCHLIST))
     library.upsert_episode(unwatched, Episode(season_number=4, episode_number=6, air_date="2026-07-01"))
 
-    assert library.airing_next(TODAY, limit=10) == []
+    assert library.airing_next(TODAY) == []
 
 
 def test_airing_next_skips_specials_and_episodes_with_no_date(library: Library) -> None:
@@ -194,7 +194,7 @@ def test_airing_next_skips_specials_and_episodes_with_no_date(library: Library) 
     library.upsert_episode(title_id, Episode(season_number=2, episode_number=2, air_date="2026-07-02"))
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(2, 1)))
 
-    airing = library.airing_next(TODAY, limit=10)
+    airing = library.airing_next(TODAY)
     assert [(row.season_number, row.episode_number) for row in airing] == [(2, 2)]
 
 
@@ -205,17 +205,8 @@ def test_airing_next_is_ordered_by_the_calendar_across_shows(library: Library) -
         library.upsert_episode(title_id, Episode(season_number=2, episode_number=1, air_date=air_date))
         library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
 
-    airing = library.airing_next(TODAY, limit=10)
+    airing = library.airing_next(TODAY)
     assert [row.name for row in airing] == ["Chad Powers", "Shark Tank", "Stick"]
-
-
-def test_airing_next_honours_its_limit(library: Library) -> None:
-    title_id = a_show(library)
-    for number in range(1, 6):
-        library.upsert_episode(title_id, Episode(season_number=2, episode_number=number, air_date="2026-07-01"))
-    library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
-
-    assert len(library.airing_next(TODAY, limit=3)) == 3
 
 
 def test_reopening_a_library_leaves_it_as_it_was(tmp_path: Path) -> None:
@@ -233,3 +224,10 @@ def test_reopening_a_library_leaves_it_as_it_was(tmp_path: Path) -> None:
         row = library.title(title_id)
     assert row is not None
     assert (row.status, row.episodes_watched) == (Status.WATCHING, 1)
+
+
+def test_the_schema_accepts_every_status_the_domain_has(library: Library) -> None:
+    """`title_state.status` has a CHECK that spells the enum out again."""
+    for status in Status:
+        library.set_state(library.upsert_title(Title(name=status)), TitleState(status=status))
+    assert set(library.stats().by_status) == set(Status)

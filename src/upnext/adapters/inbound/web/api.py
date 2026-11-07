@@ -73,8 +73,8 @@ class TitleSummary(Wire):
     The figure `total_episodes` is comparable to."""
 
     unmatched_watched: int
-    """Distinct episodes watched that TMDB's list does not contain, counted by
-    what the export called them. Real viewings of something TMDB numbers
+    """Distinct episodes watched that TMDB's list does not contain, specials
+    included, counted by what the export called them. Real viewings of something TMDB numbers
     differently — the two together are the whole history."""
 
     enriched_at: str | None
@@ -153,13 +153,15 @@ class Airing(Wire):
 
 class Stats(Wire):
     watches: int
-    episodes_watched: int
+    distinct_episodes: int
+    """History, not progress: matched and unmatched, specials included."""
+
     titles_watched: int
     first_watch: str | None
     last_watch: str | None
 
     known_minutes: int
-    """A floor, not a total: only enriched episodes carry a runtime."""
+    """A floor, not a total: nothing has a runtime before enrichment."""
 
     by_status: dict[Status, int]
 
@@ -180,7 +182,6 @@ def get_library(settings: Annotated[Settings, Depends(get_settings)]) -> Iterato
 
 LibraryDep = Annotated[Library, Depends(get_library)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
-Limit = Annotated[int, Query(ge=1, le=100)]
 
 app = FastAPI(title="upnext", version=__version__)
 
@@ -212,18 +213,18 @@ def get_title(title_id: int, library: LibraryDep) -> TitleDetail:
 
 
 @app.get("/api/up-next")
-def up_next(library: LibraryDep, limit: Limit = 100) -> list[UpNextItem]:
-    return [UpNextItem.model_validate(row, from_attributes=True) for row in library.up_next(limit)]
+def up_next(library: LibraryDep) -> list[UpNextItem]:
+    return [UpNextItem.model_validate(row, from_attributes=True) for row in library.up_next()]
 
 
 @app.get("/api/airing")
-def airing(library: LibraryDep, limit: Limit = 100) -> Airing:
+def airing(library: LibraryDep) -> Airing:
     # UTC because that is what everything else in upnext compares in, and an
     # air date carries no timezone of its own.
     today = datetime.now(UTC).date().isoformat()
     return Airing(
         today=today,
-        episodes=[AiringItem.model_validate(row, from_attributes=True) for row in library.airing_next(today, limit)],
+        episodes=[AiringItem.model_validate(row, from_attributes=True) for row in library.airing_next(today)],
     )
 
 

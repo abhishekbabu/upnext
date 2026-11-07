@@ -53,14 +53,15 @@ ENRICHABLE = (
     "runtime",
 )
 
-# A title, the user's state and the two progress counts. Specials are excluded
-# from `episodes_watched` because the catalog leaves season 0 out of the
-# `total_episodes` it is measured against; `unmatched_watched` counts what the
-# source called an episode, because that is all there is to count it by.
+# A title, the user's state and the two counts. Specials are excluded from
+# `episodes_watched` because the catalog leaves season 0 out of the
+# `total_episodes` it is measured against. `unmatched_watched` is history, not
+# progress: every viewing `unmatched_watches` lists, specials included, counted
+# by what the source called the episode because that is all there is.
 TITLE_ROWS = """
     SELECT t.*, s.status, s.is_favorite, s.rating, s.reported_watched,
            COUNT(DISTINCT CASE WHEN e.season_number > 0 THEN w.episode_id END) AS episodes_watched,
-           COUNT(DISTINCT CASE WHEN w.episode_id IS NULL AND w.source_season > 0
+           COUNT(DISTINCT CASE WHEN w.episode_id IS NULL AND w.source_season IS NOT NULL
                                THEN w.source_season || 'x' || w.source_episode END) AS unmatched_watched,
            MAX(w.watched_at) AS last_watched_at
     FROM titles t
@@ -271,6 +272,11 @@ class Library:
 
         `episode_id` is cleared because the target's episode list is a
         different list — whatever these matched before means nothing there.
+
+        A re-import recognises a moved viewing by the source's episode id. One
+        without an id is known only by its title and numbering, both rewritten
+        here, so re-importing would record it again. TV Time gives every
+        viewing an id.
         """
         return self.conn.execute(
             """
@@ -310,7 +316,7 @@ class Library:
         # bound parameter rather than text spliced into the statement.
         rows = self.conn.execute(
             f"{TITLE_ROWS} WHERE {where} GROUP BY t.id ORDER BY {order} LIMIT ?",
-            (*params, limit or -1),
+            (*params, -1 if limit is None else limit),
         ).fetchall()
         return [
             _from_row(
@@ -357,7 +363,7 @@ class Library:
         ).fetchall()
         return [_from_row(UnmatchedWatch, row) for row in rows]
 
-    def up_next(self, limit: int) -> list[ShelfEpisode]:
+    def up_next(self) -> list[ShelfEpisode]:
         """The next unwatched episode of every show currently being watched.
 
         "Next" is the lowest-numbered episode with no watch against it, which
@@ -377,13 +383,12 @@ class Library:
                   LIMIT 1
               )
             ORDER BY last_watched_at DESC NULLS LAST
-            LIMIT ?
             """,
-            (Status.WATCHING, limit),
+            (Status.WATCHING,),
         ).fetchall()
         return [_from_row(ShelfEpisode, row) for row in rows]
 
-    def airing_next(self, today: str, limit: int) -> list[ShelfEpisode]:
+    def airing_next(self, today: str) -> list[ShelfEpisode]:
         """Episodes airing today or later, of shows with watch history, soonest first.
 
         A schedule rather than a backlog, which is why it is a separate query
@@ -410,9 +415,8 @@ class Library:
               AND e.season_number > 0
               AND EXISTS (SELECT 1 FROM watches w WHERE w.title_id = t.id)
             ORDER BY e.air_date, t.name, e.season_number, e.episode_number
-            LIMIT ?
             """,
-            (today, limit),
+            (today,),
         ).fetchall()
         return [_from_row(ShelfEpisode, row) for row in rows]
 
@@ -424,7 +428,7 @@ class Library:
                        WHEN episode_id IS NOT NULL THEN 'e' || episode_id
                        WHEN source_season IS NOT NULL
                            THEN 'u' || title_id || 'x' || source_season || 'x' || source_episode
-                   END) AS episodes_watched,
+                   END) AS distinct_episodes,
                    COUNT(DISTINCT title_id) AS titles_watched,
                    MIN(watched_at) AS first_watch,
                    MAX(watched_at) AS last_watch,

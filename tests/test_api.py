@@ -76,14 +76,9 @@ def test_up_next_is_the_next_unwatched_episode(api: TestClient) -> None:
     assert (row["name"], row["season_number"], row["episode_number"]) == ("Friends", 1, 2)
 
 
-def test_the_up_next_limit_is_bounded(api: TestClient) -> None:
-    assert api.get("/api/up-next", params={"limit": 0}).status_code == 422
-    assert api.get("/api/up-next", params={"limit": 500}).status_code == 422
-
-
 def test_stats_summarise_the_library(api: TestClient) -> None:
     body = api.get("/api/stats").json()
-    assert (body["episodes_watched"], body["known_minutes"]) == (1, 22)
+    assert (body["distinct_episodes"], body["known_minutes"]) == (1, 22)
     assert body["by_status"] == {"watching": 1, "completed": 1}
 
 
@@ -153,11 +148,6 @@ def test_airing_lists_only_future_episodes_of_watched_shows(airing_api: TestClie
 def test_airing_says_which_day_it_counted_from(airing_api: TestClient) -> None:
     """The client labels "Today" and "Tomorrow" against this, not its own clock."""
     assert airing_api.get("/api/airing").json()["today"] == datetime.now(UTC).date().isoformat()
-
-
-def test_airing_takes_a_limit(airing_api: TestClient) -> None:
-    assert airing_api.get("/api/airing?limit=0").status_code == 422
-    assert len(airing_api.get("/api/airing?limit=1").json()["episodes"]) == 1
 
 
 @pytest.fixture

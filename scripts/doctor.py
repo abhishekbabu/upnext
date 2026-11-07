@@ -1,8 +1,8 @@
 """Report what this machine is set up for, and what it is not.
 
 Answers the question that costs the most time to answer any other way: is the
-key missing, is the library empty, or is something actually broken? Reads only
-— it never writes to the library and never prints a secret.
+key missing, is the library empty, or is something actually broken? Opening the
+library applies its schema, which is the only write; it never prints a secret.
 
     just doctor
 """

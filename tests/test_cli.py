@@ -264,3 +264,9 @@ def test_move_without_a_key_explains_itself(tmp_path: Path, monkeypatch, capsys)
     title_id = a_haunting_library(db)
     assert cli.main(["--db", str(db), "move", "--title", str(title_id), "--season", "2", "--to", "1"]) == 2
     assert "No TMDB API key" in capsys.readouterr().err
+
+
+def test_enrich_refuses_a_limit_of_nothing(tmp_path: Path) -> None:
+    """`--limit 0` once meant no limit at all."""
+    with pytest.raises(SystemExit):
+        cli.main(["--db", str(tmp_path / "l.db"), "enrich", "--limit", "0"])

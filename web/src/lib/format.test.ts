@@ -41,11 +41,10 @@ describe("progressOf", () => {
       watched: 114,
       total: 228,
       share: 0.5,
-      unmatched: 0,
     });
   });
 
-  it("keeps the unmatched count beside a measured share", () => {
+  it("measures against the list alone, never adding the unmatched", () => {
     // Friends: a complete watch of TMDB's 228, plus the eight season finales
     // TheTVDB splits in two and TMDB counts once.
     expect(progressOf(title(228, 8, 228))).toEqual({
@@ -53,7 +52,6 @@ describe("progressOf", () => {
       watched: 228,
       total: 228,
       share: 1,
-      unmatched: 8,
     });
   });
 

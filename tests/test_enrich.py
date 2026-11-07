@@ -91,3 +91,16 @@ def test_progress_is_reported_per_title(library: Library) -> None:
         on_progress=lambda t, ok: seen.append((t.name, ok)),
     )
     assert seen == [("Friends", True)]
+
+
+def test_a_second_title_resolving_to_a_held_catalog_id_fails_alone(library: Library) -> None:
+    """Two rows of an export can be one show at TMDB; merging them is a person's call."""
+    catalog = FakeCatalog(found=CatalogMatch(catalog_id=1668))
+    first = imported(library, tvdb_id=79168)
+    second = imported(library, name="Friends (Reunion)", tvdb_id=1)
+
+    result = enrich(catalog, library, [first, second])
+
+    assert result.matched == ["Friends"]
+    ((name, why),) = result.failed
+    assert name == "Friends (Reunion)" and "upnext move" in why

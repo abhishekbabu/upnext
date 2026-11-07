@@ -79,7 +79,7 @@ def relinked(linked: int, unmatched: list[TitleRow]) -> None:
 
 
 def stats(summary: LibraryStats) -> None:
-    print(f"{summary.episodes_watched} episodes across {summary.titles_watched} titles")
+    print(f"{summary.distinct_episodes} episodes across {summary.titles_watched} titles")
     if summary.first_watch and summary.last_watch:
         print(f"from {summary.first_watch[:10]} to {summary.last_watch[:10]}")
     if hours := summary.known_minutes // 60:

@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { STATUS_LABELS, type Status } from "@/lib/api";
 
 /** A title's status, in the one shape it takes everywhere. */
-export function StatusBadge({ status, className }: { status: Status | null; className?: string }) {
+export function StatusBadge({ status }: { status: Status | null }) {
   if (!status) return null;
   return (
     <span
@@ -13,7 +13,6 @@ export function StatusBadge({ status, className }: { status: Status | null; clas
         status === "completed" && "bg-ok/15 text-ok",
         status === "watchlist" && "bg-accent text-accent-foreground",
         status === "stopped" && "bg-secondary text-muted-foreground",
-        className,
       )}
     >
       {STATUS_LABELS[status]}

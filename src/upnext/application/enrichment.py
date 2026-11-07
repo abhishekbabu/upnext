@@ -69,6 +69,13 @@ def enrich_title(catalog: Catalog, library: WatchLibrary, title: TitleRow) -> bo
     catalog_id = resolve_show(catalog, title)
     if catalog_id is None:
         return False
+    holder = library.title_by_tmdb_id(catalog_id)
+    if holder is not None and holder.id != title.id:
+        # Two rows of the export are one show at the catalog. Merging them is a
+        # person's call, the same one `upnext move` makes for a season.
+        raise CatalogError(
+            f"TMDB {catalog_id} is already {holder.name!r} here; use `upnext move` to file its seasons there"
+        )
 
     _store_show(library, title.id, catalog.fetch_show(catalog_id))
     library.link_watches(title.id)
@@ -157,14 +164,15 @@ def move_season(
     """
     show = catalog.fetch_show(tmdb_id)
 
-    existing = library.title_by_tmdb_id(tmdb_id)
-    if existing is None:
-        target_id = library.upsert_title(show.title)
+    # Found by any identity the catalog gave, so a target imported but not yet
+    # enriched is the same row rather than a second one.
+    target_id = library.upsert_title(show.title)
+    target = library.title(target_id)
+    if target is None or target.status is None:
         # The state is a guess and there is only one worth making: whatever the
-        # user's relationship to the show they filed it under was.
+        # user's relationship to the show they filed it under was. Never made
+        # over a state the user already has.
         library.set_state(target_id, TitleState(status=source.status or Status.WATCHING))
-    else:
-        target_id = existing.id
     _store_show(library, target_id, show)
 
     moved = library.move_watches(source_id=source.id, target_id=target_id, season=season, as_season=as_season)

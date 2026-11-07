@@ -19,7 +19,7 @@ export function Stats() {
 
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Figure label="Watches" value={count(data.watches)} />
-        <Figure label="Episodes" value={count(data.episodes_watched)} />
+        <Figure label="Episodes" value={count(data.distinct_episodes)} />
         <Figure label="Titles" value={count(data.titles_watched)} />
         {/* A floor, not a total: only enriched episodes carry a runtime. */}
         <Figure label="At least" value={runtime || "—"} />

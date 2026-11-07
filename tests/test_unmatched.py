@@ -15,7 +15,7 @@ viewing in all three is real, and none of them should invent an episode.
 
 from __future__ import annotations
 
-from conftest import one_show
+from conftest import FakeCatalog, one_show
 
 from upnext.adapters.outbound.store.library import Library
 from upnext.application.enrichment import move_season
@@ -181,7 +181,7 @@ def test_specials_are_neither_progress_nor_a_disagreement(library: Library) -> N
     assert (row.episodes_watched, row.unmatched_watched, row.total_episodes) == (1, 0, 1)
     # Still stored, still shown, still a viewing.
     assert len(library.episodes(title_id)) == 2
-    assert library.stats().episodes_watched == 2
+    assert library.stats().distinct_episodes == 2
 
 
 def test_the_library_wide_total_counts_an_episode_once_either_way(library: Library) -> None:
@@ -191,7 +191,7 @@ def test_the_library_wide_total_counts_an_episode_once_either_way(library: Libra
 
     enrich(library, title_id, total=1, episodes=[(1, 1)])
 
-    assert library.stats().episodes_watched == 2
+    assert library.stats().distinct_episodes == 2
 
 
 def test_a_watch_the_export_could_not_number_counts_as_viewing_only(library: Library) -> None:
@@ -203,7 +203,7 @@ def test_a_watch_the_export_could_not_number_counts_as_viewing_only(library: Lib
     assert (row.episodes_watched, row.unmatched_watched) == (0, 0)
     assert row.last_watched_at == "2017-03-07 05:27:58"
     assert library.stats().watches == 1
-    assert library.stats().episodes_watched == 0
+    assert library.stats().distinct_episodes == 0
     assert library.unmatched_watches(title_id) == []
 
 
@@ -498,3 +498,29 @@ def test_moving_into_a_title_the_library_already_has_does_not_duplicate_it(libra
 
     assert library.count_titles() == 2
     assert library.title(existing).episodes_watched == 1
+
+
+def test_moving_into_a_title_imported_but_not_enriched_keeps_its_state(library: Library) -> None:
+    """The target is known by its TheTVDB id only, so the catalog id finds nothing."""
+    existing = library.upsert_title(Title(name="The Haunting of Bly Manor", tvdb_id=371332))
+    library.set_state(existing, TitleState(status=Status.COMPLETED, is_favorite=True))
+    title_id = a_show(library, "The Haunting")
+    library.record_watch(title_id, Watch(watched_at="2020-10-01 00:00:00", episode=(2, 1)))
+
+    catalog = FakeCatalog(
+        title=Title(name="The Haunting of Bly Manor", tmdb_id=109958, tvdb_id=371332),
+        episodes=[Episode(season_number=1, episode_number=1)],
+    )
+    move_season(catalog, library, source=library.title(title_id), tmdb_id=109958, season=2, as_season=1)
+
+    target = library.title(existing)
+    assert (target.status, target.is_favorite, target.episodes_watched) == (Status.COMPLETED, True, 1)
+    assert library.count_titles() == 2
+
+
+def test_an_unmatched_special_is_counted_where_it_is_listed(library: Library) -> None:
+    title_id = a_show(library)
+    library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(0, 5)))
+    enrich(library, title_id, total=1, episodes=[(1, 1)])
+
+    assert library.title(title_id).unmatched_watched == len(library.unmatched_watches(title_id)) == 1

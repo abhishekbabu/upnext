@@ -98,7 +98,9 @@ export function Library() {
                   </p>
                 )}
                 {progress.kind === "unmatched" && (
-                  <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">{progress.unmatched} watched</p>
+                  <p className="mt-2 font-mono text-[10.5px] text-muted-foreground">
+                    {progress.unmatched} watched · none on TMDB&rsquo;s list
+                  </p>
                 )}
               </ShelfCard>
             );

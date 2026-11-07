@@ -165,8 +165,11 @@ export interface components {
         Stats: {
             /** Watches */
             watches: number;
-            /** Episodes Watched */
-            episodes_watched: number;
+            /**
+             * Distinct Episodes
+             * @description History, not progress: matched and unmatched, specials included.
+             */
+            distinct_episodes: number;
             /** Titles Watched */
             titles_watched: number;
             /** First Watch */
@@ -175,7 +178,7 @@ export interface components {
             last_watch: string | null;
             /**
              * Known Minutes
-             * @description A floor, not a total: only enriched episodes carry a runtime.
+             * @description A floor, not a total: nothing has a runtime before enrichment.
              */
             known_minutes: number;
             /** By Status */
@@ -218,8 +221,8 @@ export interface components {
             episodes_watched: number;
             /**
              * Unmatched Watched
-             * @description Distinct episodes watched that TMDB's list does not contain, counted by
-             *     what the export called them. Real viewings of something TMDB numbers
+             * @description Distinct episodes watched that TMDB's list does not contain, specials
+             *     included, counted by what the export called them. Real viewings of something TMDB numbers
              *     differently — the two together are the whole history.
              */
             unmatched_watched: number;
@@ -297,8 +300,8 @@ export interface components {
             episodes_watched: number;
             /**
              * Unmatched Watched
-             * @description Distinct episodes watched that TMDB's list does not contain, counted by
-             *     what the export called them. Real viewings of something TMDB numbers
+             * @description Distinct episodes watched that TMDB's list does not contain, specials
+             *     included, counted by what the export called them. Real viewings of something TMDB numbers
              *     differently — the two together are the whole history.
              */
             unmatched_watched: number;
@@ -454,9 +457,7 @@ export interface operations {
     };
     up_next_api_up_next_get: {
         parameters: {
-            query?: {
-                limit?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -472,22 +473,11 @@ export interface operations {
                     "application/json": components["schemas"]["UpNextItem"][];
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     airing_api_airing_get: {
         parameters: {
-            query?: {
-                limit?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -501,15 +491,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Airing"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -99,3 +99,13 @@ def test_a_watch_with_no_episode_number_is_kept_against_the_show(export_dir: Pat
     beyblade = by_name(export_dir)["Beyblade"]
     assert [w.episode for w in beyblade.watches] == [None, None]
     assert len(beyblade.watches) == 2
+
+
+def test_an_export_in_a_shape_it_does_not_know_is_an_export_error(export_dir: Path, write_csv, watch_row) -> None:
+    write_csv(
+        export_dir / "tracking-prod-records-v2.csv",
+        ["user_id", "created_at", "s_id", "ep_id", "gsi", "key", "series_name", "season_number", "episode_number"],
+        [watch_row("2019-01-01 00:00:00", "not-a-number", "1", "watch-episode-1", "Odd", 1, 1)],
+    )
+    with pytest.raises(ExportError, match="does not read as a TV Time export"):
+        TVTimeExport().read(export_dir)
