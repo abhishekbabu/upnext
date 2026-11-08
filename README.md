@@ -30,7 +30,7 @@ You need [`uv`](https://docs.astral.sh/uv/) (it fetches Python 3.15),
 just install                          # dependencies and git hooks
 cp .env.template .env                 # then add your TMDB key (below)
 just import ~/Documents/tv-time-data  # your TV Time export
-just enrich                           # fetch episode lists and artwork
+just enrich                           # fetch episode lists and artwork (--refresh later, for new seasons)
 just ui                               # http://localhost:8000
 ```
 
@@ -51,7 +51,7 @@ and how much of it is enriched.
 | Command | What it does |
 | --- | --- |
 | `upnext import <dir>` | Read an export into the library. Offline; no key needed. |
-| `upnext enrich [--limit N]` | Match unenriched titles against TMDB. |
+| `upnext enrich [--limit N] [--refresh]` | Match unenriched titles against TMDB. `--refresh` fetches every title again, for new seasons and episodes. |
 | `upnext relink` | Re-match watches against stored episode lists, without the network. |
 | `upnext move --title <id> --season <n> --to <tmdb_id> [--as-season <n>]` | Move a season's watches to the show they belong to, such as a spin-off filed as season 2 of its parent. |
 | `upnext stats` | Summarise the library. |
