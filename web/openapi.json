@@ -114,6 +114,51 @@
         }
       }
     },
+    "/api/titles/{title_id}/status": {
+      "put": {
+        "summary": "Set Status",
+        "description": "File a title under a status. Kept over whatever a later re-import says.",
+        "operationId": "set_status_api_titles__title_id__status_put",
+        "parameters": [
+          {
+            "name": "title_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMaximum": 9223372036854775808,
+              "exclusiveMinimum": 0,
+              "title": "Title Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/up-next": {
       "get": {
         "summary": "Up Next",
@@ -340,12 +385,25 @@
         "type": "string",
         "enum": [
           "watching",
+          "watch_later",
           "watchlist",
           "completed",
           "stopped"
         ],
         "title": "Status",
-        "description": "Where a title sits for the user.\n\nDeliberately four buckets and no \"unwatched\": a title with no relationship\nto the user has no state row at all. Declared in the order a library is\nread \u2014 what you are on, then the rest \u2014 which is the order every count of\nthem is listed in."
+        "description": "Where a title sits for the user.\n\nNo \"unwatched\": a title with no relationship to the user has no state row\nat all. Declared in the order a library is read \u2014 what you are on, then\nthe rest \u2014 which is the order every count of them is listed in."
+      },
+      "StatusChange": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "StatusChange"
       },
       "Timeline": {
         "properties": {

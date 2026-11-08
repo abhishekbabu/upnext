@@ -116,7 +116,11 @@ CREATE INDEX IF NOT EXISTS watches_episode ON watches (episode_id);
 -- The user's relationship to a title, as opposed to the title's own facts.
 CREATE TABLE IF NOT EXISTS title_state (
     title_id            INTEGER PRIMARY KEY REFERENCES titles (id) ON DELETE CASCADE,
-    status              TEXT    NOT NULL CHECK (status IN ('watching', 'completed', 'watchlist', 'stopped')),
+    status              TEXT    NOT NULL
+                        CHECK (status IN ('watching', 'watch_later', 'watchlist', 'completed', 'stopped')),
+    -- Set when the status was chosen in upnext (directly, or by marking an
+    -- episode). A re-import then leaves it alone: the export is older news.
+    status_pinned       INTEGER NOT NULL DEFAULT 0,
     is_favorite         INTEGER NOT NULL DEFAULT 0,
     -- 1-10 in upnext's own scale; a TV Time 1-5 rating is doubled on import.
     rating              INTEGER,

@@ -223,6 +223,19 @@ def get_title(title_id: Annotated[int, PathParam(gt=0, lt=2**63)], library: Libr
     )
 
 
+class StatusChange(Wire):
+    status: Status
+
+
+@app.put("/api/titles/{title_id}/status", status_code=204)
+def set_status(title_id: Annotated[int, PathParam(gt=0, lt=2**63)], change: StatusChange, library: LibraryDep) -> None:
+    """File a title under a status. Kept over whatever a later re-import says."""
+    try:
+        library.set_status(title_id, change.status)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.get("/api/up-next")
 def up_next(library: LibraryDep) -> list[UpNextItem]:
     return [UpNextItem.model_validate(row, from_attributes=True) for row in library.up_next()]

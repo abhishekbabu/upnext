@@ -25,6 +25,7 @@ export type Stats = Schemas["Stats"];
 /** Every status, labelled, in the order a library is read: what you are on, then the rest. */
 export const STATUS_LABELS: Record<Status, string> = {
   watching: "Watching",
+  watch_later: "Watch later",
   watchlist: "Watchlist",
   completed: "Completed",
   stopped: "Stopped",
@@ -32,10 +33,14 @@ export const STATUS_LABELS: Record<Status, string> = {
 
 export const STATUSES = Object.keys(STATUS_LABELS) as Status[];
 
-async function request<T>(path: string, method: "GET" | "POST" | "DELETE" = "GET"): Promise<T> {
+async function request<T>(path: string, method: "GET" | "POST" | "PUT" | "DELETE" = "GET", body?: unknown): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, { method, headers: { accept: "application/json" } });
+    response = await fetch(path, {
+      method,
+      headers: { accept: "application/json", ...(body === undefined ? {} : { "content-type": "application/json" }) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
   } catch {
     // fetch rejects only when the request never completed — the server is not
     // running, or the network is gone. Neither has a `detail` to show.
@@ -62,5 +67,7 @@ export const api = {
   timeline: () => request<Timeline>("/api/timeline"),
   markWatched: (episodeId: number) => request<void>(`/api/episodes/${episodeId}/watch`, "POST"),
   unmarkWatched: (episodeId: number) => request<void>(`/api/episodes/${episodeId}/watch`, "DELETE"),
+  setStatus: ({ titleId, status }: { titleId: number; status: Status }) =>
+    request<void>(`/api/titles/${titleId}/status`, "PUT", { status }),
   stats: () => request<Stats>("/api/stats"),
 };

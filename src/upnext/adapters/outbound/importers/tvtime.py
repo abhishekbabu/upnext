@@ -67,6 +67,7 @@ def _status_for(
       active and archived   -> completed; archiving is how TV Time says "seen it all"
       not active            -> stopped, if there is any history to have stopped
       no follow row at all  -> see below
+      "for later"           -> watch_later if started, watchlist if not
 
     The follow file is not complete. A real export left 29 followed shows out
     of it — Severance, Shōgun, Stick — while the per-show data still says
@@ -79,7 +80,11 @@ def _status_for(
         if not active:
             return Status.STOPPED
         return Status.COMPLETED if archived else Status.WATCHING
-    if for_later or not has_history:
+    if for_later:
+        # TV Time has one "for later" list; whether the show was started is
+        # what tells a paused show from one not begun.
+        return Status.WATCH_LATER if has_history else Status.WATCHLIST
+    if not has_history:
         return Status.WATCHLIST
     return Status.WATCHING if followed_per_show_data else Status.STOPPED
 
