@@ -1,54 +1,59 @@
 import { useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
 import { StatusBadge } from "@/components/ui/badge";
+import { ListControls } from "@/components/ui/list-controls";
 import { PageHeader } from "@/components/ui/page-header";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Shelf, ShelfCard } from "@/components/ui/shelf";
 import { Empty, Failed, Loading } from "@/components/ui/state";
-import { STATUSES, STATUS_LABELS, type Status } from "@/lib/api";
+import { STATUSES, STATUS_LABELS, type Status, type TitleSummary } from "@/lib/api";
 import { progressOf } from "@/lib/format";
+import { byName, descending, narrow, useListParams, type SortOption } from "@/lib/list";
 import { useTitles } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
-/** Everything, filterable by status and searchable by name. */
+const SORTS: readonly SortOption<TitleSummary>[] = [
+  { value: "recent", label: "Recently watched", compare: null },
+  { value: "name", label: "Name", compare: byName },
+  { value: "year", label: "Newest", compare: descending((title) => title.year) },
+  {
+    value: "progress",
+    label: "Progress",
+    // Only a measured share is progress; a bare count has nothing to divide by.
+    compare: descending((title) => {
+      const progress = progressOf(title);
+      return progress.kind === "measured" ? progress.share : null;
+    }),
+  },
+];
+
+/** Everything, filterable by status, searchable by name, and sortable. */
 export function Library() {
-  const [params, setParams] = useSearchParams();
+  const { params, search, sort, set } = useListParams(SORTS);
   const status = asStatus(params.get("status"));
-  const search = params.get("q") ?? "";
 
   const { data, isPending, error } = useTitles(status);
-
-  const shown = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return data ?? [];
-    return (data ?? []).filter((title) => title.name.toLowerCase().includes(needle));
-  }, [data, search]);
+  const shown = useMemo(() => narrow(data ?? [], search, sort), [data, search, sort]);
 
   return (
     <>
       <PageHeader title="Library" detail="Everything upnext knows you have watched, or mean to." />
 
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <FilterTab active={!status} onClick={() => setParam(setParams, "status", null)}>
+      <ListControls
+        search={search}
+        onSearch={(value) => set("q", value)}
+        sorts={SORTS}
+        sort={sort}
+        onSort={(value) => set("sort", value === SORTS[0]!.value ? null : value)}
+      >
+        <FilterTab active={!status} onClick={() => set("status", null)}>
           All
         </FilterTab>
         {STATUSES.map((value) => (
-          <FilterTab key={value} active={status === value} onClick={() => setParam(setParams, "status", value)}>
+          <FilterTab key={value} active={status === value} onClick={() => set("status", value)}>
             {STATUS_LABELS[value]}
           </FilterTab>
         ))}
-        <input
-          type="search"
-          value={search}
-          onChange={(event) => setParam(setParams, "q", event.target.value)}
-          placeholder="Filter by name"
-          aria-label="Filter by name"
-          className={cn(
-            "ml-auto w-52 rounded-md border border-border bg-card px-2.5 py-1.5",
-            "text-[13px] placeholder:text-muted-foreground",
-          )}
-        />
-      </div>
+      </ListControls>
 
       {error ? (
         <Failed error={error} />
@@ -141,17 +146,4 @@ function FilterTab({
  */
 function asStatus(value: string | null): Status | undefined {
   return STATUSES.includes(value as Status) ? (value as Status) : undefined;
-}
-
-/** One parameter changed, the others kept; replaced, so typing is not history. */
-function setParam(setParams: ReturnType<typeof useSearchParams>[1], key: "status" | "q", value: string | null) {
-  setParams(
-    (current) => {
-      const next = new URLSearchParams(current);
-      if (value) next.set(key, value);
-      else next.delete(key);
-      return next;
-    },
-    { replace: true },
-  );
 }

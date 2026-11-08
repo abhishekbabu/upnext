@@ -54,6 +54,7 @@ const NEXT_UP: UpNextItem = {
   episode_number: 2,
   episode_name: "A Fight, Once Begun",
   last_watched_at: "2026-07-06 05:27:04",
+  air_date: "2006-04-14",
 };
 
 const TODAY = "2099-01-01";
@@ -166,6 +167,27 @@ describe("UpNext", () => {
     draw(<UpNext />);
 
     expect(await screen.findByText("Nothing in progress")).toBeTruthy();
+  });
+
+  it("searches and sorts the shelf, keeping both in the address", async () => {
+    const stick = { ...NEXT_UP, title_id: 2, episode_id: 45, name: "Stick", air_date: "2026-11-03" };
+    stubFetch({ "/api/up-next": [NEXT_UP, stick] });
+    draw(<UpNext />, "/up-next?sort=newest");
+
+    await screen.findByText("Stick");
+    expect(screen.getAllByRole("link").map((link) => link.textContent?.slice(0, 5))).toEqual(["Stick", "Avata"]);
+    expect(screen.getByRole("combobox", { name: "Sort" })).toHaveProperty("value", "newest");
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "avatar" } });
+    await waitFor(() => expect(screen.queryByText("Stick")).toBeNull());
+    expect(screen.getByText("Avatar: The Last Airbender")).toBeTruthy();
+  });
+
+  it("says when a search finds nothing on the shelf", async () => {
+    stubFetch({ "/api/up-next": [NEXT_UP] });
+    draw(<UpNext />, "/up-next?q=zzz");
+
+    expect(await screen.findByText("Nothing matching “zzz”")).toBeTruthy();
   });
 
   it("marks the next episode from the shelf", async () => {
@@ -301,6 +323,19 @@ describe("Library", () => {
 
     expect(await screen.findByText("320 watched · none on TMDB’s list")).toBeTruthy();
     expect(screen.queryByRole("progressbar")).toBeNull();
+  });
+
+  it("sorts by name, and by progress with the unmeasured last", async () => {
+    const half = { ...FRIENDS, id: 3, name: "Arrow", episodes_watched: 114 };
+    stubFetch({ "/api/titles": [FRIENDS, UNENRICHED, half] });
+    const { container } = draw(<Library />, "/library?sort=name");
+
+    const names = () => [...container.querySelectorAll("li p[title]")].map((p) => p.textContent);
+    await screen.findByText("Arrow");
+    expect(names()).toEqual(["Armor Wars", "Arrow", "Friends"]);
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), { target: { value: "progress" } });
+    await waitFor(() => expect(names()).toEqual(["Friends", "Arrow", "Armor Wars"]));
   });
 
   it("keeps the search in the address, so going back finds it", async () => {
