@@ -43,6 +43,10 @@ class DuplicateTitleError(UpnextError):
     """
 
 
+class RemovalError(UpnextError):
+    """A title with viewings cannot be removed: that would delete history. Stop it instead."""
+
+
 class NotFoundError(UpnextError):
     """Something was asked for by an id the library does not have."""
 

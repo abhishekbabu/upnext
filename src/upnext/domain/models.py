@@ -166,6 +166,10 @@ class TitleRow:
     matched yet — read it with `enriched_at`, never alone.
     """
 
+    viewings: int
+    """Every recorded viewing, numbered or not, rewatches included. Zero is what
+    makes a title removable: nothing of the user's history goes with it."""
+
     enriched_at: str | None
     """When the catalog last answered for this title, or None if never.
 

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from upnext.adapters.outbound.store.db import connect
-from upnext.domain.errors import NotFoundError
+from upnext.domain.errors import NotFoundError, RemovalError
 from upnext.domain.matching import CatalogEntry, match
 from upnext.domain.models import (
     APP_SOURCE,
@@ -65,6 +65,7 @@ TITLE_ROWS = """
            COUNT(DISTINCT CASE WHEN e.season_number > 0 THEN w.episode_id END) AS episodes_watched,
            COUNT(DISTINCT CASE WHEN w.episode_id IS NULL AND w.source_season IS NOT NULL
                                THEN w.source_season || 'x' || w.source_episode END) AS unmatched_watched,
+           COUNT(w.id) AS viewings,
            MAX(w.watched_at) AS last_watched_at
     FROM titles t
     LEFT JOIN title_state s ON s.title_id = t.id
@@ -480,6 +481,34 @@ class Library:
             ),
         )
         self.set_status(episode["title_id"], Status.WATCHING)
+
+    def remove_title(self, title_id: int, *, removed_at: str) -> None:
+        """Delete a title nobody has watched, and remember it so imports skip it.
+
+        Its episodes and state go with it (`ON DELETE CASCADE`).
+
+        Raises:
+            NotFoundError: no title has that id.
+            RemovalError: it has viewings; removing it would delete history.
+        """
+        title = self.conn.execute("SELECT tvdb_id, name, year FROM titles WHERE id = ?", (title_id,)).fetchone()
+        if title is None:
+            raise NotFoundError(f"No title with id {title_id}")
+        if self.conn.execute("SELECT 1 FROM watches WHERE title_id = ?", (title_id,)).fetchone():
+            raise RemovalError(f"{title['name']} has viewings, so it stays; set it to stopped instead")
+        self.conn.execute(
+            "INSERT INTO removed_titles (tvdb_id, name, year, removed_at) VALUES (?, ?, ?, ?)",
+            (title["tvdb_id"], title["name"], title["year"], removed_at),
+        )
+        self.conn.execute("DELETE FROM titles WHERE id = ?", (title_id,))
+
+    def was_removed(self, title: Title) -> bool:
+        """Whether this title, as an import names it, was removed from the library."""
+        if title.tvdb_id is not None:
+            sql, params = "SELECT 1 FROM removed_titles WHERE tvdb_id = ?", (title.tvdb_id,)
+        else:
+            sql, params = "SELECT 1 FROM removed_titles WHERE name = ? AND year IS ?", (title.name, title.year)
+        return self.conn.execute(sql, params).fetchone() is not None
 
     def set_status(self, title_id: int, status: Status) -> None:
         """File a title under `status`, chosen in upnext, so a re-import keeps it.

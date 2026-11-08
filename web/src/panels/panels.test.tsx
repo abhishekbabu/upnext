@@ -395,6 +395,7 @@ describe("Title", () => {
     overview: "Six friends.",
     air_status: "Ended",
     rating: 10,
+    viewings: 3,
     today: "2026-09-01",
     episodes: [
       {
@@ -418,6 +419,23 @@ describe("Title", () => {
     ],
     unmatched: [{ season_number: 6, episode_number: 25, watch_count: 1, last_watched_at: "2018-06-01 00:00:00" }],
   };
+
+  it("removes a title nobody watched, after a second click", async () => {
+    drawTitle({ ...DETAIL, episodes_watched: 0, unmatched_watched: 0, viewings: 0, unmatched: [] });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Remove from library" }));
+    expect(writes).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(writes).toEqual(["DELETE /api/titles/1"]));
+    // The refetch it triggers must land while fetch is still stubbed.
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+  });
+
+  it("offers no removal once anything has been watched", async () => {
+    drawTitle(DETAIL);
+    await screen.findByText("Friends");
+    expect(screen.queryByRole("button", { name: "Remove from library" })).toBeNull();
+  });
 
   it("changes the status in place", async () => {
     drawTitle(DETAIL);
@@ -504,6 +522,7 @@ describe("a show numbered wholly differently", () => {
       overview: null,
       air_status: null,
       rating: null,
+      viewings: 60,
       today: "2026-09-01",
       episodes: [],
       unmatched: MANY,

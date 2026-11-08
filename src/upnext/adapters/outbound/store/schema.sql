@@ -132,3 +132,16 @@ CREATE TABLE IF NOT EXISTS title_state (
 );
 
 CREATE INDEX IF NOT EXISTS title_state_status ON title_state (status);
+
+-- Titles removed from the library, remembered so a re-import of an export
+-- that still lists them does not bring them back. Matched the way an import
+-- names a title: by TheTVDB id where there is one, else by name and year.
+CREATE TABLE IF NOT EXISTS removed_titles (
+    id          INTEGER PRIMARY KEY,
+    tvdb_id     INTEGER,
+    name        TEXT    NOT NULL,
+    year        INTEGER,
+    removed_at  TEXT    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS removed_titles_tvdb ON removed_titles (tvdb_id);

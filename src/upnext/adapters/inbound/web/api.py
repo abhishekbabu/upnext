@@ -30,7 +30,7 @@ from starlette.types import Scope
 from upnext import __version__
 from upnext.adapters.outbound.store.library import Library, open_library
 from upnext.config.settings import PROJECT_ROOT, Settings
-from upnext.domain.errors import NotFoundError
+from upnext.domain.errors import NotFoundError, RemovalError
 from upnext.domain.models import Status
 
 logger = logging.getLogger(__name__)
@@ -119,6 +119,9 @@ class TitleDetail(TitleSummary):
 
     rating: int | None
     """Out of 10. A TV Time rating out of 5 is doubled on import."""
+
+    viewings: int
+    """Every viewing recorded. A title with none can be removed."""
 
     episodes: list[TitleEpisode] = []
     unmatched: list[UnmatchedViewing] = []
@@ -236,6 +239,17 @@ def set_status(title_id: Annotated[int, PathParam(gt=0, lt=2**63)], change: Stat
         library.set_status(title_id, change.status)
     except NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.delete("/api/titles/{title_id}", status_code=204)
+def remove_title(title_id: Annotated[int, PathParam(gt=0, lt=2**63)], library: LibraryDep) -> None:
+    """Remove a title nobody has watched; imports then leave it out. One with viewings is a 409."""
+    try:
+        library.remove_title(title_id, removed_at=datetime.now(UTC).isoformat(timespec="seconds"))
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RemovalError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.get("/api/up-next")

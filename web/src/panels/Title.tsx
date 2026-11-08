@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Check, ChevronLeft } from "lucide-react";
 import { Poster } from "@/components/ui/poster";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { RemoveTitle } from "@/components/ui/remove-title";
 import { StatusPicker } from "@/components/ui/status-picker";
 import { Empty, Failed, Loading } from "@/components/ui/state";
 import { WatchButton } from "@/components/ui/watch-button";
@@ -98,6 +99,13 @@ export function Title() {
               </p>
             )}
           </div>
+
+          {/* Only with nothing watched: removing never takes history with it. */}
+          {data.viewings === 0 && (
+            <div className="mt-5">
+              <RemoveTitle titleId={data.id} name={data.name} />
+            </div>
+          )}
         </div>
       </div>
 
