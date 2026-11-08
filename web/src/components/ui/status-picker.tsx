@@ -1,3 +1,4 @@
+import { Select } from "@/components/ui/select";
 import { STATUSES, STATUS_LABELS, type Status } from "@/lib/api";
 import { useSetStatus } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -10,7 +11,7 @@ export function StatusPicker({ titleId, status }: { titleId: number; status: Sta
   const setStatus = useSetStatus();
 
   return (
-    <select
+    <Select
       aria-label="Status"
       value={status ?? ""}
       disabled={setStatus.isPending}
@@ -30,6 +31,6 @@ export function StatusPicker({ titleId, status }: { titleId: number; status: Sta
           {STATUS_LABELS[value]}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }

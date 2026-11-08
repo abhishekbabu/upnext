@@ -1,3 +1,4 @@
+import { Select } from "@/components/ui/select";
 import type { SortOption } from "@/lib/list";
 import { cn } from "@/lib/utils";
 
@@ -26,13 +27,13 @@ export function ListControls<T>({
     <div className="mb-6 flex flex-wrap items-center gap-2">
       {children}
       <div className="ml-auto flex items-center gap-2">
-        <select aria-label="Sort" value={sort.value} onChange={(event) => onSort(event.target.value)} className={field}>
+        <Select aria-label="Sort" value={sort.value} onChange={(event) => onSort(event.target.value)} className={field}>
           {sorts.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
           ))}
-        </select>
+        </Select>
         <input
           type="search"
           value={search}
