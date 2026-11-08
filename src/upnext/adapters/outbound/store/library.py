@@ -19,6 +19,7 @@ from upnext.domain.errors import NotFoundError, RemovalError
 from upnext.domain.matching import CatalogEntry, match
 from upnext.domain.models import (
     APP_SOURCE,
+    FINISHED_RUNS,
     Episode,
     EpisodeRow,
     Kind,
@@ -72,6 +73,18 @@ TITLE_ROWS = """
     LEFT JOIN watches w ON w.title_id = t.id
     LEFT JOIN episodes e ON e.id = w.episode_id
 """
+
+_FINISHED = f"""
+    SELECT t.id FROM titles t
+     WHERE t.air_status IN ({", ".join("?" * len(FINISHED_RUNS))})
+       AND EXISTS (SELECT 1 FROM episodes e WHERE e.title_id = t.id AND e.season_number > 0)
+       AND NOT EXISTS (
+           SELECT 1 FROM episodes e
+            WHERE e.title_id = t.id AND e.season_number > 0
+              AND NOT EXISTS (SELECT 1 FROM watches w WHERE w.episode_id = e.id))
+"""
+"""Shows that have ended with every episode watched, specials aside. Takes
+`FINISHED_RUNS` as its parameters."""
 
 SHELF_EPISODES = """
     SELECT t.id AS title_id, t.name, t.poster_path,
@@ -452,9 +465,10 @@ class Library:
 
         Linked to the episode directly — there is no source numbering to match,
         only the catalog's — and recorded under the catalog's numbering, so a
-        relink leaves it where it is. Watching an episode of a show filed
-        anything but `watching` refiles it there, as a status chosen in upnext:
-        a new season of a finished show is being watched again.
+        relink leaves it where it is. The show is refiled as a status chosen in
+        upnext: `completed` if that was the last episode of a show that has
+        ended, `watching` otherwise — a new season of a finished show is being
+        watched again.
 
         Raises:
             NotFoundError: no episode has that id.
@@ -480,7 +494,33 @@ class Library:
                 episode_id,
             ),
         )
-        self.set_status(episode["title_id"], Status.WATCHING)
+        # The last episode of a show that has ended finishes it; anything else
+        # means it is being watched, whatever it was filed as before.
+        finished = self._finished(episode["title_id"])
+        self.set_status(episode["title_id"], Status.COMPLETED if finished else Status.WATCHING)
+
+    def complete_finished(self, title_id: int | None = None) -> int:
+        """File as `completed` each ended show with every episode watched.
+
+        Every title, or only `title_id`. A status chosen in upnext is left
+        alone, so a finished show set back to `watching` stays there. Returns
+        how many were refiled.
+        """
+        return self.conn.execute(
+            f"""
+            UPDATE title_state SET status = ?
+             WHERE status != ? AND status_pinned = 0
+               AND (? IS NULL OR title_id = ?)
+               AND title_id IN ({_FINISHED})
+            """,
+            (Status.COMPLETED, Status.COMPLETED, title_id, title_id, *FINISHED_RUNS),
+        ).rowcount
+
+    def _finished(self, title_id: int) -> bool:
+        return (
+            self.conn.execute(f"SELECT 1 FROM ({_FINISHED}) WHERE id = ?", (*FINISHED_RUNS, title_id)).fetchone()
+            is not None
+        )
 
     def remove_title(self, title_id: int, *, removed_at: str) -> None:
         """Delete a title nobody has watched, and remember it so imports skip it.
@@ -546,6 +586,15 @@ class Library:
         ).rowcount
         if not removed:
             raise NotFoundError(f"No viewing of episode {episode_id} was marked in upnext")
+        # Taking back the episode that finished a show un-finishes it.
+        self.conn.execute(
+            f"""
+            UPDATE title_state SET status = ?
+             WHERE status = ? AND title_id = (SELECT title_id FROM episodes WHERE id = ?)
+               AND title_id NOT IN ({_FINISHED})
+            """,
+            (Status.WATCHING, Status.COMPLETED, episode_id, *FINISHED_RUNS),
+        )
 
     def stats(self) -> LibraryStats:
         totals = self.conn.execute(

@@ -380,3 +380,71 @@ def test_a_title_with_viewings_cannot_be_removed(library: Library) -> None:
 def test_removing_a_title_that_does_not_exist_says_so(library: Library) -> None:
     with pytest.raises(NotFoundError):
         library.remove_title(999, removed_at="2026-11-08T00:00:00+00:00")
+
+
+def a_finished_run(library: Library, air_status: str = "Ended") -> tuple[int, list[int]]:
+    """A show with two episodes and a special, none of them watched yet."""
+    title_id = a_show(library, air_status=air_status)
+    library.set_state(title_id, TitleState(status=Status.WATCHING))
+    for season, number in ((0, 1), (1, 1), (1, 2)):
+        library.upsert_episode(title_id, Episode(season_number=season, episode_number=number, air_date="2020-01-01"))
+    return title_id, [e.id for e in library.episodes(title_id) if e.season_number > 0]
+
+
+def watch_all(library: Library, title_id: int) -> None:
+    for number in (1, 2):
+        library.record_watch(title_id, Watch(watched_at=f"2020-01-0{number} 00:00:00", episode=(1, number)))
+    library.link_watches(title_id)
+
+
+def test_an_ended_show_watched_to_the_end_is_completed_specials_aside(library: Library) -> None:
+    title_id, _ = a_finished_run(library)
+    library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
+    library.link_watches(title_id)
+    assert library.complete_finished() == 0
+
+    watch_all(library, title_id)
+
+    assert library.complete_finished() == 1
+    assert library.title(title_id).status is Status.COMPLETED
+
+
+def test_a_show_still_running_is_not_completed_by_catching_up(library: Library) -> None:
+    title_id, _ = a_finished_run(library, air_status="Returning Series")
+    watch_all(library, title_id)
+
+    library.complete_finished()
+
+    assert library.title(title_id).status is Status.WATCHING
+
+
+def test_a_status_chosen_in_upnext_is_not_completed_over(library: Library) -> None:
+    title_id, _ = a_finished_run(library)
+    watch_all(library, title_id)
+    library.set_status(title_id, Status.WATCHING)
+
+    library.complete_finished()
+
+    assert library.title(title_id).status is Status.WATCHING
+
+
+def test_marking_the_last_episode_completes_the_show_and_unmarking_it_does_not(library: Library) -> None:
+    title_id, (first, last) = a_finished_run(library)
+    library.mark_watched(first, watched_at="2026-06-15 21:00:00")
+    assert library.title(title_id).status is Status.WATCHING
+
+    library.mark_watched(last, watched_at="2026-06-15 22:00:00")
+    assert library.title(title_id).status is Status.COMPLETED
+
+    library.unmark_watched(last)
+    assert library.title(title_id).status is Status.WATCHING
+
+
+def test_unmarking_a_rewatch_leaves_a_finished_show_completed(library: Library) -> None:
+    title_id, (first, _) = a_finished_run(library)
+    watch_all(library, title_id)
+    library.mark_watched(first, watched_at="2026-06-15 21:00:00")
+
+    library.unmark_watched(first)
+
+    assert library.title(title_id).status is Status.COMPLETED

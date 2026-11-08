@@ -49,5 +49,7 @@ def import_export(source: ImportSource, library: WatchLibrary, export_dir: Path)
         library.set_state(title_id, item.state)
         for watch in item.watches:
             library.record_watch(title_id, watch)
+    # An export still filing a finished show as followed does not unfinish it.
+    library.complete_finished()
     library.commit()
     return summarize(imported)

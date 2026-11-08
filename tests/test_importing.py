@@ -8,7 +8,7 @@ from upnext.adapters.outbound.importers.tvtime import TVTimeExport
 from upnext.adapters.outbound.store.library import Library
 from upnext.application.importing import import_export, summarize
 from upnext.domain.errors import ExportError
-from upnext.domain.models import ImportedTitle, Status, Title, TitleState, Watch
+from upnext.domain.models import Episode, ImportedTitle, Status, Title, TitleState, Watch
 
 
 def test_an_export_round_trips_into_the_library(library: Library, export_dir: Path) -> None:
@@ -66,3 +66,22 @@ def test_a_removed_title_is_not_imported_again(export_dir: Path, library: Librar
 
     assert "Beyblade" not in [t.name for t in library.titles()]
     assert summary.titles == len(library.titles())
+
+
+def test_a_re_import_does_not_reopen_a_show_finished_since(export_dir: Path, library: Library) -> None:
+    """TV Time still files it as followed; the catalog says it has ended and every episode is watched."""
+    import_export(TVTimeExport(), library, export_dir)
+    show = next(t for t in library.titles() if t.status is Status.WATCHING and t.unmatched_watched)
+    numbers = library.conn.execute(
+        "SELECT DISTINCT source_season, source_episode FROM watches WHERE title_id = ? AND source_season > 0",
+        (show.id,),
+    ).fetchall()
+    library.replace_episodes(
+        show.id, [Episode(season_number=s, episode_number=n) for s, n in numbers], keep_seasons=set()
+    )
+    library.link_watches(show.id)
+    library.conn.execute("UPDATE titles SET air_status = 'Ended' WHERE id = ?", (show.id,))
+
+    import_export(TVTimeExport(), library, export_dir)
+
+    assert library.title(show.id).status is Status.COMPLETED

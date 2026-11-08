@@ -130,3 +130,13 @@ def test_a_season_the_catalog_could_not_serve_keeps_what_it_had(library: Library
     enrich_title(catalog, library, library.title(title.id))
 
     assert [(e.season_number, e.episode_number) for e in library.episodes(title.id)] == [(0, 1), (1, 1), (1, 2)]
+
+
+def test_enrichment_completes_a_show_the_catalog_says_has_ended(library: Library) -> None:
+    title = imported(library, tvdb_id=79168)
+    for number in (1, 2):
+        library.record_watch(title.id, Watch(watched_at=f"2020-01-0{number} 00:00:00", episode=(1, number)))
+
+    enrich_title(FakeCatalog(found=CatalogMatch(catalog_id=1668)), library, title)
+
+    assert library.title(title.id).status is Status.COMPLETED

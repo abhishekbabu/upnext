@@ -110,6 +110,11 @@ status chosen in the app (or set by marking) is `status_pinned`, and a re-import
 leaves it alone. Schema changes to an existing table go in `db._upgrade`,
 counted by `PRAGMA user_version`.
 
+**A finished show is completed.** One whose catalog `air_status` is in
+`FINISHED_RUNS` with every episode watched, specials aside, is filed `completed`
+by `complete_finished` after each enrichment and import, and by marking its last
+episode. A pinned status is left alone; a show still running never qualifies.
+
 **Removing a title never removes history.** Only a title with no viewings can be
 removed (`remove_title`, else `RemovalError`), and `removed_titles` remembers it
 so `import_export` leaves it out of every later import.
