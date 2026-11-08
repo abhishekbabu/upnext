@@ -307,3 +307,41 @@ def test_a_refresh_fetches_titles_already_enriched_for_new_seasons(
     with open_library(db) as library:
         assert [(e.season_number, e.episode_number) for e in library.episodes(friends.id)] == [(0, 1), (1, 1), (1, 2)]
     assert "every title already has catalog data" not in capsys.readouterr().out
+
+
+def test_serve_refreshes_from_tmdb_beside_the_server(tmp_path: Path, monkeypatch, capsys) -> None:
+    """A server start is when someone is about to look at the timeline."""
+    from upnext.adapters.inbound.web.api import app
+
+    db = tmp_path / "library.db"
+    with open_library(db) as library:
+        friends = library.upsert_title(Title(name="Friends", tvdb_id=79168))
+    monkeypatch.setenv("UPNEXT_TMDB_API_KEY", "key")
+    monkeypatch.setattr(bootstrap, "build_catalog", lambda settings: FakeCatalog(found=CatalogMatch(catalog_id=1668)))
+    started: list = []
+    monkeypatch.setattr(cli, "refresh_in_background", lambda s, real=cli.refresh_in_background: started.append(real(s)))
+    monkeypatch.setattr("uvicorn.run", lambda app, host, port: None)
+
+    try:
+        assert cli.main(["--db", str(db), "serve"]) == 0
+        (thread,) = started
+        thread.join(timeout=10)
+    finally:
+        app.dependency_overrides.clear()
+
+    with open_library(db) as library:
+        assert library.title(friends).enriched_at is not None
+    assert "Refreshed 1 of 1 titles from TMDB." in capsys.readouterr().out
+
+
+def test_serve_without_a_key_or_with_no_refresh_does_not_call_tmdb(tmp_path: Path, monkeypatch, capsys) -> None:
+    def no_catalog(settings):
+        raise AssertionError("TMDB was called")
+
+    monkeypatch.setattr(bootstrap, "build_catalog", no_catalog)
+    monkeypatch.setattr("uvicorn.run", lambda app, host, port: None)
+    assert cli.main(["--db", str(tmp_path / "l.db"), "serve"]) == 0
+    assert "No TMDB key, so no refresh" in capsys.readouterr().out
+
+    monkeypatch.setenv("UPNEXT_TMDB_API_KEY", "key")
+    assert cli.main(["--db", str(tmp_path / "l.db"), "serve", "--no-refresh"]) == 0

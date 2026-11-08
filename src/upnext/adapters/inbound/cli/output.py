@@ -41,6 +41,20 @@ def nothing_to_enrich(library_is_empty: bool) -> None:
         )
 
 
+def refresh_skipped() -> None:
+    print("No TMDB key, so no refresh: the timeline shows what the last `upnext enrich` fetched.", flush=True)
+
+
+def refreshing(count: int) -> None:
+    print(f"Refreshing {count} titles from TMDB in the background…", flush=True)
+
+
+def refreshed(result: EnrichmentResult) -> None:
+    trouble = len(result.failed) + len(result.duplicates)
+    note = f"; {trouble} could not be refreshed (`upnext enrich --refresh` lists them)" if trouble else ""
+    print(f"Refreshed {len(result.matched)} of {result.total} titles from TMDB{note}.", flush=True)
+
+
 def enriching(count: int) -> None:
     print(f"Enriching {count} titles from TMDB…")
 
