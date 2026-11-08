@@ -37,7 +37,9 @@ def api(tmp_path: Path, serve: Serve) -> TestClient:
         friends = library.upsert_title(Title(name="Friends", tvdb_id=79168, tmdb_id=1668, year=1994))
         library.set_state(friends, TitleState(status=Status.WATCHING, is_favorite=True, rating=10))
         for number in (1, 2, 3):
-            library.upsert_episode(friends, Episode(season_number=1, episode_number=number, runtime=22))
+            library.upsert_episode(
+                friends, Episode(season_number=1, episode_number=number, runtime=22, air_date="1994-09-22")
+            )
         library.record_watch(friends, Watch(watched_at="2018-05-12 01:10:14", episode=(1, 1), source="tvtime"))
         library.link_watches(friends)
 
