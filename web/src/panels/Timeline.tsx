@@ -9,8 +9,9 @@ import { useTimeline } from "@/lib/queries";
 import { groupBy } from "@/lib/utils";
 
 /**
- * The home page: unwatched episodes of shows you watch, from the last month
- * through everything scheduled, by air date.
+ * The home page: unwatched episodes of shows you are watching or have on your
+ * watchlist and have started, from the last month through everything
+ * scheduled, by air date. Stopped and archived shows stay off it.
  *
  * A list to work down. An episode that is out has a button to mark it, and
  * marking takes it off; what has not aired yet is there to see coming. Older
@@ -23,7 +24,7 @@ export function Timeline() {
     <>
       <PageHeader
         title="Timeline"
-        detail="Unwatched episodes from the past month, and what is coming, for shows you have watched."
+        detail="Unwatched episodes from the past month, and what is coming, for shows you are watching."
       />
       {error ? (
         <Failed error={error} />

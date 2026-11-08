@@ -8,7 +8,7 @@ library is one SQLite file on your own machine.
 
 ## Features
 
-- **Timeline** (the home page): unwatched episodes from the past month and everything coming up, for shows you've watched. Mark each one as you watch it.
+- **Timeline** (the home page): unwatched episodes from the past month and everything coming up, for shows you're watching. Mark each one as you watch it.
 - **Up next**: the next unwatched episode of every show you're part-way through.
 - **Library**: everything you've watched or plan to, filterable by status.
 - **Title pages**: every episode by season, what you've seen, and any viewings TMDB's list can't account for.

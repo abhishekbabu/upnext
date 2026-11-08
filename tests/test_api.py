@@ -123,7 +123,7 @@ def timeline_api(tmp_path: Path, serve: Serve) -> TestClient:
     recent = (datetime.now(UTC).date() - timedelta(days=5)).isoformat()
     with open_library(db_path) as library:
         lasso = library.upsert_title(Title(name="Ted Lasso", tmdb_id=97546))
-        library.set_state(lasso, TitleState(status=Status.STOPPED))
+        library.set_state(lasso, TitleState(status=Status.WATCHING))
         library.upsert_episode(lasso, Episode(season_number=1, episode_number=1, air_date="2000-01-01"))
         library.upsert_episode(lasso, Episode(season_number=4, episode_number=4, air_date=recent))
         library.upsert_episode(
