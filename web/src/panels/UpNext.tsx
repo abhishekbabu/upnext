@@ -1,8 +1,12 @@
+import { useMemo } from "react";
+import { ListControls } from "@/components/ui/list-controls";
 import { PageHeader } from "@/components/ui/page-header";
 import { Shelf, ShelfCard } from "@/components/ui/shelf";
 import { Empty, Failed, Loading } from "@/components/ui/state";
 import { WatchButton } from "@/components/ui/watch-button";
+import type { UpNextItem } from "@/lib/api";
 import { episodeCode, shortDate } from "@/lib/format";
+import { byName, descending, narrow, useListParams, type SortOption } from "@/lib/list";
 import { useUpNext } from "@/lib/queries";
 
 /**
@@ -17,12 +21,28 @@ import { useUpNext } from "@/lib/queries";
  * than what has just come out or is coming. Separate questions, separate
  * queries, neither folded into the other.
  */
+const SORTS: readonly SortOption<UpNextItem>[] = [
+  { value: "recent", label: "Recently watched", compare: null },
+  { value: "name", label: "Name", compare: byName },
+  // Air dates are YYYY-MM-DD, so they order as text.
+  { value: "newest", label: "Newest episode", compare: descending((item) => item.air_date) },
+];
+
 export function UpNext() {
   const { data, isPending, error } = useUpNext();
+  const { search, sort, set } = useListParams(SORTS);
+  const shown = useMemo(() => narrow(data ?? [], search, sort), [data, search, sort]);
 
   return (
     <>
       <PageHeader title="Up next" detail="The next episode of everything you have started." />
+      <ListControls
+        search={search}
+        onSearch={(value) => set("q", value)}
+        sorts={SORTS}
+        sort={sort}
+        onSort={(value) => set("sort", value === SORTS[0]!.value ? null : value)}
+      />
       {error ? (
         <Failed error={error} />
       ) : isPending ? (
@@ -32,9 +52,14 @@ export function UpNext() {
           title="Nothing in progress"
           detail="Shows you are part-way through appear here. Import a library and enrich it, then start watching."
         />
+      ) : shown.length === 0 ? (
+        <Empty
+          title={`Nothing matching “${search}”`}
+          detail="Try a shorter fragment — the filter matches anywhere in the name."
+        />
       ) : (
         <Shelf>
-          {data.map((item) => (
+          {shown.map((item) => (
             <ShelfCard key={item.episode_id} titleId={item.title_id} name={item.name} posterPath={item.poster_path}>
               <div className="mt-0.5 flex items-center justify-between gap-2">
                 <p className="font-mono text-[11px] text-muted-foreground">

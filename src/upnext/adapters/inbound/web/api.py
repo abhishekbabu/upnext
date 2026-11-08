@@ -144,6 +144,8 @@ class UpNextItem(ShelfEpisode):
     """The next unwatched episode of one show in progress."""
 
     last_watched_at: str | None
+    air_date: str | None
+    """When the episode aired, for sorting by the newest; null if TMDB has no date."""
 
 
 class TimelineItem(ShelfEpisode):

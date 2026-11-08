@@ -410,6 +410,11 @@ export interface components {
             episode_name: string | null;
             /** Last Watched At */
             last_watched_at: string | null;
+            /**
+             * Air Date
+             * @description When the episode aired, for sorting by the newest; null if TMDB has no date.
+             */
+            air_date: string | null;
         };
         /** ValidationError */
         ValidationError: {

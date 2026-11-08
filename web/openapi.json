@@ -882,6 +882,18 @@
               }
             ],
             "title": "Last Watched At"
+          },
+          "air_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Date",
+            "description": "When the episode aired, for sorting by the newest; null if TMDB has no date."
           }
         },
         "type": "object",
@@ -893,7 +905,8 @@
           "season_number",
           "episode_number",
           "episode_name",
-          "last_watched_at"
+          "last_watched_at",
+          "air_date"
         ],
         "title": "UpNextItem",
         "description": "The next unwatched episode of one show in progress."
