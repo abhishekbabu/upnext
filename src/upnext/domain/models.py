@@ -68,6 +68,14 @@ class Episode:
     tmdb_id: int | None = None
 
 
+FINISHED_RUNS = frozenset({"Ended", "Canceled"})
+"""The catalog's `air_status` values for a show that will have no more episodes.
+
+Watching every episode of one of these is finishing it, so it is filed
+`completed`. A show still running never is: its next season is the timeline's.
+"""
+
+
 APP_SOURCE = "upnext"
 """The `source` of a viewing marked in upnext itself rather than imported."""
 

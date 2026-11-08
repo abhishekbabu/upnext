@@ -82,6 +82,8 @@ def enrich_title(catalog: Catalog, library: WatchLibrary, title: TitleRow) -> bo
 
     _store_show(library, title.id, catalog.fetch_show(catalog_id))
     library.link_watches(title.id)
+    # The catalog is what says a show has ended.
+    library.complete_finished(title.id)
     library.commit()
     return True
 

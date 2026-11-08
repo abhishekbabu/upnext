@@ -113,6 +113,10 @@ class WatchLibrary(Protocol):
 
     def apply_enrichment(self, title_id: int, title: Title, *, enriched_at: str) -> None: ...
 
+    def complete_finished(self, title_id: int | None = None) -> int:
+        """File ended shows with every episode watched as completed, unless pinned."""
+        ...
+
     def commit(self) -> None:
         """Make everything written since the last commit durable.
 

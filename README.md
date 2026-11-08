@@ -10,7 +10,7 @@ library is one SQLite file on your own machine.
 
 - **Timeline** (the home page): unwatched episodes from the past month and everything coming up, for shows you're watching. Mark each one as you watch it.
 - **Up next**: the next unwatched episode of every show you're part-way through. Search and sort it like the library.
-- **Library**: everything you've watched or plan to, filterable by status: watching, watch later (started but paused), watchlist (not started), completed, stopped. Search by name, sort by recently watched, name, newest or progress. Change a show's status on its page, or remove a show you haven't watched any of; re-imports leave a removed show out.
+- **Library**: everything you've watched or plan to, filterable by status: watching, watch later (started but paused), watchlist (not started), completed, stopped. Search by name, sort by recently watched, name, newest or progress. A show that has ended is filed completed once you've watched every episode. Change a show's status on its page, or remove a show you haven't watched any of; re-imports leave a removed show out.
 - **Title pages**: every episode by season, what you've seen, and any viewings TMDB's list can't account for.
 - **Stats**: totals, date range and time watched.
 - **Imports from TV Time**: reads its GDPR export offline, and re-importing the same export changes nothing.
