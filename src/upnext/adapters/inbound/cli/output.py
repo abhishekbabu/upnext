@@ -35,7 +35,10 @@ def nothing_to_enrich(library_is_empty: bool) -> None:
     if library_is_empty:
         print("Nothing to enrich — the library is empty. Run `upnext import <export-dir>` first.")
     else:
-        print("Nothing to enrich — every title already has catalog data.")
+        print(
+            "Nothing to enrich — every title already has catalog data. "
+            "`upnext enrich --refresh` fetches it again, for new seasons."
+        )
 
 
 def enriching(count: int) -> None:

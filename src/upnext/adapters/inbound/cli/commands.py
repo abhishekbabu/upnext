@@ -30,7 +30,10 @@ def cmd_import(args: argparse.Namespace, settings: Settings, library: Library) -
 
 
 def cmd_enrich(args: argparse.Namespace, settings: Settings, library: Library) -> None:
-    pending = library.needing_enrichment(limit=args.limit)
+    # Enrichment is a snapshot: a show enriched in August knows nothing of a
+    # season TMDB added in October. A refresh asks again for every title, most
+    # recently watched first.
+    pending = library.titles()[: args.limit] if args.refresh else library.needing_enrichment(limit=args.limit)
     if not pending:
         output.nothing_to_enrich(library_is_empty=library.count_titles() == 0)
         return
@@ -120,6 +123,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_enrich = sub.add_parser("enrich", help="Resolve imported titles against TMDB")
     p_enrich.add_argument("--limit", type=_positive, default=None, help="Only enrich the first N titles")
+    p_enrich.add_argument(
+        "--refresh", action="store_true", help="Fetch titles already enriched again too, for new seasons and episodes"
+    )
     p_enrich.set_defaults(func=in_library(cmd_enrich))
 
     p_move = sub.add_parser(

@@ -288,3 +288,22 @@ def test_a_malformed_setting_is_named_rather_than_dumped(monkeypatch, capsys) ->
 def test_a_title_id_sqlite_cannot_hold_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         cli.main(["--db", str(tmp_path / "l.db"), "move", "--title", str(2**64), "--season", "1", "--to", "1"])
+
+
+def test_a_refresh_fetches_titles_already_enriched_for_new_seasons(
+    export_dir: Path, tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """Edgerunners was enriched as Ended with one season; TMDB added a second later."""
+    db = tmp_path / "library.db"
+    cli.main(["--db", str(db), "import", str(export_dir)])
+    with open_library(db) as library:
+        for title in library.needing_enrichment():
+            library.apply_enrichment(title.id, Title(name=title.name), enriched_at="2026-01-01T00:00:00+00:00")
+        friends = next(t for t in library.titles() if t.name == "Friends")
+    monkeypatch.setattr(bootstrap, "build_catalog", lambda settings: FakeCatalog(found=CatalogMatch(catalog_id=1668)))
+
+    assert cli.main(["--db", str(db), "enrich", "--refresh"]) == 0
+
+    with open_library(db) as library:
+        assert [(e.season_number, e.episode_number) for e in library.episodes(friends.id)] == [(0, 1), (1, 1), (1, 2)]
+    assert "every title already has catalog data" not in capsys.readouterr().out
