@@ -109,3 +109,13 @@ def test_an_export_in_a_shape_it_does_not_know_is_an_export_error(export_dir: Pa
     )
     with pytest.raises(ExportError, match="does not read as a TV Time export"):
         TVTimeExport().read(export_dir)
+
+
+def test_a_show_followed_only_in_the_show_data_is_still_being_watched(export_dir: Path, write_csv) -> None:
+    """The follow file leaves shows out; the show data's `is_followed` decides then."""
+    assert by_name(export_dir)["The Flash"].state.status is Status.STOPPED
+
+    fields = ["nb_episodes_seen", "tv_show_name", "user_id", "tv_show_id", "is_followed", "is_favorited"]
+    flash = {"nb_episodes_seen": "5", "tv_show_name": "The Flash (2014)", "user_id": "1", "tv_show_id": "279121"}
+    write_csv(export_dir / "user_tv_show_data.csv", fields, [flash | {"is_followed": "1", "is_favorited": "0"}])
+    assert by_name(export_dir)["The Flash"].state.status is Status.WATCHING
