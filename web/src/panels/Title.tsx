@@ -124,7 +124,7 @@ export function Title() {
                   <li
                     key={episode.id}
                     className={cn(
-                      "flex items-baseline gap-3 px-3.5 py-2.5",
+                      "flex items-center gap-3 px-3.5 py-2.5",
                       episode.watch_count === 0 && "text-muted-foreground",
                     )}
                   >
@@ -137,32 +137,36 @@ export function Title() {
                         {shortDate(episode.air_date)}
                       </span>
                     )}
-                    {episode.marked_here ? (
-                      <WatchButton
-                        episodeId={episode.id}
-                        season={episode.season_number}
-                        episode={episode.episode_number}
-                        undo
-                      />
-                    ) : episode.watch_count === 0 && episode.air_date && episode.air_date <= data.today ? (
-                      <WatchButton
-                        episodeId={episode.id}
-                        season={episode.season_number}
-                        episode={episode.episode_number}
-                      />
-                    ) : (
-                      <span className="size-7 shrink-0" aria-hidden />
-                    )}
-                    <span className="w-14 shrink-0 text-right">
-                      {episode.watch_count > 0 && (
-                        <span className="inline-flex items-center gap-1 font-mono text-[10.5px] text-ok">
+                    {/* One status column: a tick for watched (a button that
+                        unmarks, if marked here), a mark button for aired and
+                        unwatched, nothing for what has not aired. */}
+                    <span className="flex h-7 w-16 shrink-0 items-center justify-end gap-1">
+                      {episode.watch_count > 1 && (
+                        <span className="font-mono text-[10.5px] text-ok" aria-hidden>
+                          ×{episode.watch_count}
+                        </span>
+                      )}
+                      {episode.marked_here ? (
+                        <WatchButton
+                          episodeId={episode.id}
+                          season={episode.season_number}
+                          episode={episode.episode_number}
+                          undo
+                        />
+                      ) : episode.watch_count > 0 ? (
+                        <span className="inline-flex size-7 items-center justify-center text-ok">
                           <Check className="size-3.5" aria-hidden />
-                          <span aria-hidden>{episode.watch_count > 1 ? `×${episode.watch_count}` : ""}</span>
                           <span className="sr-only">
                             watched {episode.watch_count} {episode.watch_count === 1 ? "time" : "times"}
                           </span>
                         </span>
-                      )}
+                      ) : episode.air_date && episode.air_date <= data.today ? (
+                        <WatchButton
+                          episodeId={episode.id}
+                          season={episode.season_number}
+                          episode={episode.episode_number}
+                        />
+                      ) : null}
                     </span>
                   </li>
                 ))}
