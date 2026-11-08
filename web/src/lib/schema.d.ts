@@ -72,18 +72,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/airing": {
+    "/api/timeline": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Airing */
-        get: operations["airing_api_airing_get"];
+        /** Timeline */
+        get: operations["timeline_api_timeline_get"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/episodes/{episode_id}/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Watched
+         * @description Record a viewing now. Stamped in UTC, in the same shape imported timestamps take.
+         */
+        post: operations["mark_watched_api_episodes__episode_id__watch_post"];
+        /**
+         * Unmark Watched
+         * @description Remove the latest viewing marked in upnext. Imported history stays.
+         */
+        delete: operations["unmark_watched_api_episodes__episode_id__watch_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -110,39 +134,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** Airing */
-        Airing: {
-            /**
-             * Today
-             * @description The day the list starts at, in UTC. Sent rather than left to the client,
-             *     which would otherwise have to agree with the server about when today is.
-             */
-            today: string;
-            /** Episodes */
-            episodes: components["schemas"]["AiringItem"][];
-        };
-        /**
-         * AiringItem
-         * @description One episode airing today or later, of a show with watch history.
-         */
-        AiringItem: {
-            /** Title Id */
-            title_id: number;
-            /** Name */
-            name: string;
-            /** Poster Path */
-            poster_path: string | null;
-            /** Episode Id */
-            episode_id: number;
-            /** Season Number */
-            season_number: number;
-            /** Episode Number */
-            episode_number: number;
-            /** Episode Name */
-            episode_name: string | null;
-            /** Air Date */
-            air_date: string;
-        };
         /**
          * Config
          * @description What the client needs to know about this installation to render at all.
@@ -197,6 +188,40 @@ export interface components {
          * @enum {string}
          */
         Status: "watching" | "watchlist" | "completed" | "stopped";
+        /** Timeline */
+        Timeline: {
+            /**
+             * Today
+             * @description Today in UTC. Sent rather than left to the client, which would otherwise
+             *     have to agree with the server about when today is — and so which episodes
+             *     are out to be marked.
+             */
+            today: string;
+            /** Episodes */
+            episodes: components["schemas"]["TimelineItem"][];
+        };
+        /**
+         * TimelineItem
+         * @description One unwatched episode, recently out or still to come, of a show with watch history.
+         */
+        TimelineItem: {
+            /** Title Id */
+            title_id: number;
+            /** Name */
+            name: string;
+            /** Poster Path */
+            poster_path: string | null;
+            /** Episode Id */
+            episode_id: number;
+            /** Season Number */
+            season_number: number;
+            /** Episode Number */
+            episode_number: number;
+            /** Episode Name */
+            episode_name: string | null;
+            /** Air Date */
+            air_date: string;
+        };
         /** TitleDetail */
         TitleDetail: {
             /** Id */
@@ -254,6 +279,13 @@ export interface components {
              * @default []
              */
             unmatched: components["schemas"]["UnmatchedViewing"][];
+            /**
+             * Today
+             * @description Today in UTC, so the client can tell an episode that is out — and can be
+             *     marked — from one that is not, without its own clock.
+             * @default
+             */
+            today: string;
         };
         /** TitleEpisode */
         TitleEpisode: {
@@ -272,6 +304,11 @@ export interface components {
              * @description Viewings, so a rewatch is 2 rather than collapsing into "seen".
              */
             watch_count: number;
+            /**
+             * Marked Here
+             * @description Whether a viewing was marked in upnext, and so can be unmarked.
+             */
+            marked_here: boolean;
         };
         /**
          * TitleSummary
@@ -475,7 +512,7 @@ export interface operations {
             };
         };
     };
-    airing_api_airing_get: {
+    timeline_api_timeline_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -490,7 +527,65 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Airing"];
+                    "application/json": components["schemas"]["Timeline"];
+                };
+            };
+        };
+    };
+    mark_watched_api_episodes__episode_id__watch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                episode_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unmark_watched_api_episodes__episode_id__watch_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                episode_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

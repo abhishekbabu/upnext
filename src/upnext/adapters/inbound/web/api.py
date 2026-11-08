@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -30,6 +30,7 @@ from starlette.types import Scope
 from upnext import __version__
 from upnext.adapters.outbound.store.library import Library, open_library
 from upnext.config.settings import PROJECT_ROOT, Settings
+from upnext.domain.errors import NotFoundError
 from upnext.domain.models import Status
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,9 @@ class TitleEpisode(Wire):
     watch_count: int
     """Viewings, so a rewatch is 2 rather than collapsing into "seen"."""
 
+    marked_here: bool
+    """Whether a viewing was marked in upnext, and so can be unmarked."""
+
 
 class UnmatchedViewing(Wire):
     """Viewings of an episode TMDB's list does not contain, in the export's numbering.
@@ -119,6 +123,10 @@ class TitleDetail(TitleSummary):
     episodes: list[TitleEpisode] = []
     unmatched: list[UnmatchedViewing] = []
 
+    today: str = ""
+    """Today in UTC, so the client can tell an episode that is out — and can be
+    marked — from one that is not, without its own clock."""
+
 
 class ShelfEpisode(Wire):
     """An episode beside its show's name and artwork."""
@@ -138,18 +146,19 @@ class UpNextItem(ShelfEpisode):
     last_watched_at: str | None
 
 
-class AiringItem(ShelfEpisode):
-    """One episode airing today or later, of a show with watch history."""
+class TimelineItem(ShelfEpisode):
+    """One unwatched episode, recently out or still to come, of a show with watch history."""
 
     air_date: str
 
 
-class Airing(Wire):
+class Timeline(Wire):
     today: str
-    """The day the list starts at, in UTC. Sent rather than left to the client,
-    which would otherwise have to agree with the server about when today is."""
+    """Today in UTC. Sent rather than left to the client, which would otherwise
+    have to agree with the server about when today is — and so which episodes
+    are out to be marked."""
 
-    episodes: list[AiringItem]
+    episodes: list[TimelineItem]
 
 
 class Stats(Wire):
@@ -204,6 +213,7 @@ def get_title(title_id: Annotated[int, PathParam(gt=0, lt=2**63)], library: Libr
         raise HTTPException(status_code=404, detail="No such title")
     return TitleDetail.model_validate(title, from_attributes=True).model_copy(
         update={
+            "today": _today().isoformat(),
             "episodes": [TitleEpisode.model_validate(row, from_attributes=True) for row in library.episodes(title_id)],
             "unmatched": [
                 UnmatchedViewing.model_validate(row, from_attributes=True)
@@ -218,15 +228,48 @@ def up_next(library: LibraryDep) -> list[UpNextItem]:
     return [UpNextItem.model_validate(row, from_attributes=True) for row in library.up_next()]
 
 
-@app.get("/api/airing")
-def airing(library: LibraryDep) -> Airing:
+def _today() -> date:
     # UTC because that is what everything else in upnext compares in, and an
     # air date carries no timezone of its own.
-    today = datetime.now(UTC).date().isoformat()
-    return Airing(
-        today=today,
-        episodes=[AiringItem.model_validate(row, from_attributes=True) for row in library.airing_next(today)],
+    return datetime.now(UTC).date()
+
+
+RECENT = timedelta(days=30)
+"""How far back the timeline reaches for episodes already out and not yet watched.
+Older ones are the backlog, which is what up next is for."""
+
+
+@app.get("/api/timeline")
+def timeline(library: LibraryDep) -> Timeline:
+    today = _today()
+    return Timeline(
+        today=today.isoformat(),
+        episodes=[
+            TimelineItem.model_validate(row, from_attributes=True)
+            for row in library.timeline(since=(today - RECENT).isoformat())
+        ],
     )
+
+
+EpisodeId = Annotated[int, PathParam(gt=0, lt=2**63)]
+
+
+@app.post("/api/episodes/{episode_id}/watch", status_code=204)
+def mark_watched(episode_id: EpisodeId, library: LibraryDep) -> None:
+    """Record a viewing now. Stamped in UTC, in the same shape imported timestamps take."""
+    try:
+        library.mark_watched(episode_id, watched_at=datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S"))
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.delete("/api/episodes/{episode_id}/watch", status_code=204)
+def unmark_watched(episode_id: EpisodeId, library: LibraryDep) -> None:
+    """Remove the latest viewing marked in upnext. Imported history stays."""
+    try:
+        library.unmark_watched(episode_id)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/api/stats")

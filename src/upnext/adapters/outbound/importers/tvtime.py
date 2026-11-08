@@ -55,7 +55,9 @@ def _int(value: str | None) -> int | None:
         return None
 
 
-def _status_for(*, followed: dict[str, str] | None, for_later: bool, has_history: bool) -> Status:
+def _status_for(
+    *, followed: dict[str, str] | None, followed_per_show_data: bool, for_later: bool, has_history: bool
+) -> Status:
     """Translate TV Time's two booleans into one status.
 
     TV Time modelled a show with `active` (still followed) and `archived`
@@ -64,7 +66,12 @@ def _status_for(*, followed: dict[str, str] | None, for_later: bool, has_history
       active, not archived  -> watching
       active and archived   -> completed; archiving is how TV Time says "seen it all"
       not active            -> stopped, if there is any history to have stopped
-      no follow row at all  -> the watchlist, or stopped if it was ever watched
+      no follow row at all  -> see below
+
+    The follow file is not complete. A real export left 29 followed shows out
+    of it — Severance, Shōgun, Stick — while the per-show data still says
+    `is_followed`. Without a follow row, that flag decides: followed and
+    watched is watching, and only unfollowed history is stopped.
     """
     if followed is not None:
         active = followed.get("active") == "1"
@@ -72,9 +79,9 @@ def _status_for(*, followed: dict[str, str] | None, for_later: bool, has_history
         if not active:
             return Status.STOPPED
         return Status.COMPLETED if archived else Status.WATCHING
-    if for_later:
+    if for_later or not has_history:
         return Status.WATCHLIST
-    return Status.STOPPED if has_history else Status.WATCHLIST
+    return Status.WATCHING if followed_per_show_data else Status.STOPPED
 
 
 def _episode_ref(season: int | None, number: int | None) -> tuple[int, int] | None:
@@ -193,6 +200,7 @@ class TVTimeExport:
                     state=TitleState(
                         status=_status_for(
                             followed=follow_row,
+                            followed_per_show_data=(show_data.get(show_id) or {}).get("is_followed") == "1",
                             for_later=show_id in for_later,
                             # A seen count with no per-episode rows still counts as
                             # history: TV Time keeps the tally after it drops the

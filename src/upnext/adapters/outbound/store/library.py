@@ -15,8 +15,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from upnext.adapters.outbound.store.db import connect
+from upnext.domain.errors import NotFoundError
 from upnext.domain.matching import CatalogEntry, match
 from upnext.domain.models import (
+    APP_SOURCE,
     Episode,
     EpisodeRow,
     Kind,
@@ -344,16 +346,16 @@ class Library:
     def episodes(self, title_id: int) -> list[EpisodeRow]:
         rows = self.conn.execute(
             """
-            SELECT e.*, COUNT(w.id) AS watch_count
+            SELECT e.*, COUNT(w.id) AS watch_count, COALESCE(MAX(w.source = ?), 0) AS marked_here
             FROM episodes e
             LEFT JOIN watches w ON w.episode_id = e.id
             WHERE e.title_id = ?
             GROUP BY e.id
             ORDER BY e.season_number, e.episode_number
             """,
-            (title_id,),
+            (APP_SOURCE, title_id),
         ).fetchall()
-        return [_from_row(EpisodeRow, row) for row in rows]
+        return [_from_row(EpisodeRow, row, marked_here=bool(row["marked_here"])) for row in rows]
 
     def unmatched_watches(self, title_id: int) -> list[UnmatchedWatch]:
         """Viewings this title's catalog episode list does not account for.
@@ -400,22 +402,22 @@ class Library:
         ).fetchall()
         return [_from_row(ShelfEpisode, row) for row in rows]
 
-    def airing_next(self, today: str) -> list[ShelfEpisode]:
-        """Episodes airing today or later, of shows with watch history, soonest first.
+    def timeline(self, since: str) -> list[ShelfEpisode]:
+        """Unwatched episodes airing on or after `since`, of shows with watch history, by air date.
 
         A schedule rather than a backlog, which is why it is a separate query
         from `up_next`: that one answers "what do I put on now" and is ordered
-        by what was watched most recently, this one answers "what is coming"
-        and is ordered by the calendar.
+        by what was watched most recently, this one answers "what has come out
+        lately, and what is coming" and is ordered by the calendar. Watched
+        episodes leave it, so it is a list to work down as episodes land.
 
         "Shows I have seen" is watch history rather than `status`, because
         status does not survive contact with a real library — a show whose new
         season is a month out is usually filed `stopped` or `completed`, having
         been finished. History is the fact; the status is an opinion about it.
 
-        `today` is the caller's, not `date('now')`, so the boundary it draws —
-        an episode airing today is upcoming, yesterday's is not — can be pinned
-        in a test.
+        `since` is the caller's, not `date('now')`, so the boundary it draws can
+        be pinned in a test.
         """
         rows = self.conn.execute(
             f"""
@@ -426,11 +428,74 @@ class Library:
             WHERE e.air_date >= ?
               AND e.season_number > 0
               AND EXISTS (SELECT 1 FROM watches w WHERE w.title_id = t.id)
+              AND NOT EXISTS (SELECT 1 FROM watches w WHERE w.episode_id = e.id)
             ORDER BY e.air_date, t.name, e.season_number, e.episode_number
             """,
-            (today,),
+            (since,),
         ).fetchall()
         return [_from_row(ShelfEpisode, row) for row in rows]
+
+    def mark_watched(self, episode_id: int, *, watched_at: str) -> None:
+        """Record a viewing of a catalog episode, made in upnext.
+
+        Linked to the episode directly — there is no source numbering to match,
+        only the catalog's — and recorded under the catalog's numbering, so a
+        relink leaves it where it is. Watching an episode of a show filed
+        anything but `watching` refiles it there: a new season of a finished
+        show is being watched again.
+
+        Raises:
+            NotFoundError: no episode has that id.
+        """
+        episode = self.conn.execute(
+            "SELECT title_id, season_number, episode_number FROM episodes WHERE id = ?", (episode_id,)
+        ).fetchone()
+        if episode is None:
+            raise NotFoundError(f"No episode with id {episode_id}")
+        seen = self.conn.execute("SELECT 1 FROM watches WHERE episode_id = ?", (episode_id,)).fetchone()
+        self.conn.execute(
+            """
+            INSERT INTO watches (title_id, watched_at, is_rewatch, source, source_season, source_episode, episode_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                episode["title_id"],
+                watched_at,
+                seen is not None,
+                APP_SOURCE,
+                episode["season_number"],
+                episode["episode_number"],
+                episode_id,
+            ),
+        )
+        self.conn.execute(
+            """
+            INSERT INTO title_state (title_id, status) VALUES (?, ?)
+            ON CONFLICT (title_id) DO UPDATE SET status = excluded.status
+            """,
+            (episode["title_id"], Status.WATCHING),
+        )
+
+    def unmark_watched(self, episode_id: int) -> None:
+        """Remove the latest viewing of this episode marked in upnext.
+
+        Only the app's own: imported history belongs to the export, and a
+        re-import would put it straight back.
+
+        Raises:
+            NotFoundError: nothing marked in upnext to remove.
+        """
+        removed = self.conn.execute(
+            """
+            DELETE FROM watches WHERE id = (
+                SELECT id FROM watches WHERE episode_id = ? AND source = ?
+                ORDER BY watched_at DESC, id DESC LIMIT 1
+            )
+            """,
+            (episode_id, APP_SOURCE),
+        ).rowcount
+        if not removed:
+            raise NotFoundError(f"No viewing of episode {episode_id} was marked in upnext")
 
     def stats(self) -> LibraryStats:
         totals = self.conn.execute(

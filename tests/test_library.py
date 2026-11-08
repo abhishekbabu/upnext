@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from upnext.adapters.outbound.store.library import Library, open_library
+from upnext.domain.errors import NotFoundError
 from upnext.domain.models import Episode, Kind, Status, Title, TitleState, Watch
 
 
@@ -135,18 +138,18 @@ def test_unnumbered_watches_still_count_toward_the_title(library: Library) -> No
 TODAY = "2026-06-15"
 
 
-def test_airing_next_starts_at_today_and_leaves_yesterday_behind(library: Library) -> None:
-    """Today is upcoming; the day before it has already happened."""
+def test_the_timeline_starts_where_it_is_told(library: Library) -> None:
+    """The day given is in; the day before it is the backlog's."""
     title_id = a_show(library)
     library.upsert_episode(title_id, Episode(season_number=1, episode_number=1, air_date="2026-06-14"))
     library.upsert_episode(title_id, Episode(season_number=1, episode_number=2, air_date=TODAY))
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
 
-    airing = library.airing_next(TODAY)
-    assert [row.air_date for row in airing] == [TODAY]
+    timeline = library.timeline(since=TODAY)
+    assert [row.air_date for row in timeline] == [TODAY]
 
 
-def test_airing_next_covers_shows_watched_whatever_their_status(library: Library) -> None:
+def test_the_timeline_covers_shows_watched_whatever_their_status(library: Library) -> None:
     """A show returning after a break is filed `stopped` or `completed`, not `watching`.
 
     Status is an opinion about a show; a watch is a fact. Filtering on status
@@ -157,11 +160,11 @@ def test_airing_next_covers_shows_watched_whatever_their_status(library: Library
     library.upsert_episode(stopped, Episode(season_number=4, episode_number=5, air_date="2026-07-01"))
     library.record_watch(stopped, Watch(watched_at="2023-01-01 00:00:00", episode=(1, 1)))
 
-    airing = library.airing_next(TODAY)
-    assert [row.name for row in airing] == ["Ted Lasso"]
+    timeline = library.timeline(since=TODAY)
+    assert [row.name for row in timeline] == ["Ted Lasso"]
 
 
-def test_airing_next_ignores_a_show_never_watched(library: Library) -> None:
+def test_the_timeline_ignores_a_show_never_watched(library: Library) -> None:
     """A scheduled episode of something never seen is not "up next" for anyone.
 
     An enriched library is full of these: anything on the watchlist, and every
@@ -171,10 +174,10 @@ def test_airing_next_ignores_a_show_never_watched(library: Library) -> None:
     library.set_state(unwatched, TitleState(status=Status.WATCHLIST))
     library.upsert_episode(unwatched, Episode(season_number=4, episode_number=6, air_date="2026-07-01"))
 
-    assert library.airing_next(TODAY) == []
+    assert library.timeline(since=TODAY) == []
 
 
-def test_airing_next_skips_specials_and_episodes_with_no_date(library: Library) -> None:
+def test_the_timeline_skips_specials_and_episodes_with_no_date(library: Library) -> None:
     """Season 0 is never the next thing to watch, and an undated episode is unscheduled."""
     title_id = a_show(library)
     library.upsert_episode(title_id, Episode(season_number=0, episode_number=1, air_date="2026-07-01"))
@@ -182,19 +185,19 @@ def test_airing_next_skips_specials_and_episodes_with_no_date(library: Library) 
     library.upsert_episode(title_id, Episode(season_number=2, episode_number=2, air_date="2026-07-02"))
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(2, 1)))
 
-    airing = library.airing_next(TODAY)
-    assert [(row.season_number, row.episode_number) for row in airing] == [(2, 2)]
+    timeline = library.timeline(since=TODAY)
+    assert [(row.season_number, row.episode_number) for row in timeline] == [(2, 2)]
 
 
-def test_airing_next_is_ordered_by_the_calendar_across_shows(library: Library) -> None:
+def test_the_timeline_is_ordered_by_the_calendar_across_shows(library: Library) -> None:
     """The soonest episode leads, whichever show it belongs to."""
     for name, air_date in [("Stick", "2026-11-03"), ("Chad Powers", "2026-09-03"), ("Shark Tank", "2026-09-30")]:
         title_id = a_show(library, name=name)
         library.upsert_episode(title_id, Episode(season_number=2, episode_number=1, air_date=air_date))
         library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
 
-    airing = library.airing_next(TODAY)
-    assert [row.name for row in airing] == ["Chad Powers", "Shark Tank", "Stick"]
+    timeline = library.timeline(since=TODAY)
+    assert [row.name for row in timeline] == ["Chad Powers", "Shark Tank", "Stick"]
 
 
 def test_reopening_a_library_leaves_it_as_it_was(tmp_path: Path) -> None:
@@ -219,3 +222,55 @@ def test_the_schema_accepts_every_status_the_domain_has(library: Library) -> Non
     for status in Status:
         library.set_state(library.upsert_title(Title(name=status)), TitleState(status=status))
     assert set(library.stats().by_status) == set(Status)
+
+
+def test_an_episode_leaves_the_timeline_once_watched(library: Library) -> None:
+    title_id = a_show(library)
+    library.upsert_episode(title_id, Episode(season_number=2, episode_number=1, air_date=TODAY))
+    library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
+    (episode,) = library.timeline(since=TODAY)
+
+    library.mark_watched(episode.episode_id, watched_at="2026-06-15 21:00:00")
+
+    assert library.timeline(since=TODAY) == []
+
+
+def test_marking_records_a_linked_viewing_and_refiles_the_show_as_watching(library: Library) -> None:
+    """A new season of a show filed `stopped` is being watched again."""
+    title_id = a_show(library)
+    library.set_state(title_id, TitleState(status=Status.STOPPED, rating=8))
+    library.upsert_episode(title_id, Episode(season_number=2, episode_number=1))
+    (episode,) = library.episodes(title_id)
+
+    library.mark_watched(episode.id, watched_at="2026-06-15 21:00:00")
+    library.mark_watched(episode.id, watched_at="2026-06-16 21:00:00")
+
+    (episode,) = library.episodes(title_id)
+    assert (episode.watch_count, episode.marked_here) == (2, True)
+    row = library.title(title_id)
+    assert (row.status, row.rating, row.episodes_watched) == (Status.WATCHING, 8, 1)
+    # A relink leaves it where it is: it was recorded in the catalog's numbering.
+    library.link_watches(title_id)
+    assert library.title(title_id).episodes_watched == 1
+
+
+def test_unmarking_takes_back_only_what_upnext_marked(library: Library) -> None:
+    title_id = a_show(library)
+    library.upsert_episode(title_id, Episode(season_number=1, episode_number=1))
+    library.record_watch(title_id, Watch(watched_at="2018-05-12 01:10:14", episode=(1, 1), source="tvtime"))
+    library.link_watches(title_id)
+    (episode,) = library.episodes(title_id)
+    assert not episode.marked_here
+    with pytest.raises(NotFoundError):
+        library.unmark_watched(episode.id)
+
+    library.mark_watched(episode.id, watched_at="2026-06-15 21:00:00")
+    library.unmark_watched(episode.id)
+
+    (episode,) = library.episodes(title_id)
+    assert (episode.watch_count, episode.marked_here) == (1, False)
+
+
+def test_marking_an_episode_that_does_not_exist_says_so(library: Library) -> None:
+    with pytest.raises(NotFoundError):
+        library.mark_watched(999, watched_at="2026-06-15 21:00:00")

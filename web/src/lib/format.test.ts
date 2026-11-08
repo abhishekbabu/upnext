@@ -128,6 +128,7 @@ describe("airingDay", () => {
   it("names today and tomorrow rather than dating them", () => {
     expect(airingDay(TODAY, TODAY)).toBe("Today");
     expect(airingDay("2026-09-02", TODAY)).toBe("Tomorrow");
+    expect(airingDay("2026-08-31", TODAY)).toBe("Yesterday");
   });
 
   it("gives a weekday and a date for anything further out", () => {

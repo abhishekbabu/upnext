@@ -136,17 +136,85 @@
         }
       }
     },
-    "/api/airing": {
+    "/api/timeline": {
       "get": {
-        "summary": "Airing",
-        "operationId": "airing_api_airing_get",
+        "summary": "Timeline",
+        "operationId": "timeline_api_timeline_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Airing"
+                  "$ref": "#/components/schemas/Timeline"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/episodes/{episode_id}/watch": {
+      "post": {
+        "summary": "Mark Watched",
+        "description": "Record a viewing now. Stamped in UTC, in the same shape imported timestamps take.",
+        "operationId": "mark_watched_api_episodes__episode_id__watch_post",
+        "parameters": [
+          {
+            "name": "episode_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMaximum": 9223372036854775808,
+              "exclusiveMinimum": 0,
+              "title": "Episode Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Unmark Watched",
+        "description": "Remove the latest viewing marked in upnext. Imported history stays.",
+        "operationId": "unmark_watched_api_episodes__episode_id__watch_delete",
+        "parameters": [
+          {
+            "name": "episode_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMaximum": 9223372036854775808,
+              "exclusiveMinimum": 0,
+              "title": "Episode Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -175,91 +243,6 @@
   },
   "components": {
     "schemas": {
-      "Airing": {
-        "properties": {
-          "today": {
-            "type": "string",
-            "title": "Today",
-            "description": "The day the list starts at, in UTC. Sent rather than left to the client,\nwhich would otherwise have to agree with the server about when today is."
-          },
-          "episodes": {
-            "items": {
-              "$ref": "#/components/schemas/AiringItem"
-            },
-            "type": "array",
-            "title": "Episodes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "today",
-          "episodes"
-        ],
-        "title": "Airing"
-      },
-      "AiringItem": {
-        "properties": {
-          "title_id": {
-            "type": "integer",
-            "title": "Title Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "poster_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Poster Path"
-          },
-          "episode_id": {
-            "type": "integer",
-            "title": "Episode Id"
-          },
-          "season_number": {
-            "type": "integer",
-            "title": "Season Number"
-          },
-          "episode_number": {
-            "type": "integer",
-            "title": "Episode Number"
-          },
-          "episode_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Episode Name"
-          },
-          "air_date": {
-            "type": "string",
-            "title": "Air Date"
-          }
-        },
-        "type": "object",
-        "required": [
-          "title_id",
-          "name",
-          "poster_path",
-          "episode_id",
-          "season_number",
-          "episode_number",
-          "episode_name",
-          "air_date"
-        ],
-        "title": "AiringItem",
-        "description": "One episode airing today or later, of a show with watch history."
-      },
       "Config": {
         "properties": {
           "image_base": {
@@ -363,6 +346,91 @@
         ],
         "title": "Status",
         "description": "Where a title sits for the user.\n\nDeliberately four buckets and no \"unwatched\": a title with no relationship\nto the user has no state row at all. Declared in the order a library is\nread \u2014 what you are on, then the rest \u2014 which is the order every count of\nthem is listed in."
+      },
+      "Timeline": {
+        "properties": {
+          "today": {
+            "type": "string",
+            "title": "Today",
+            "description": "Today in UTC. Sent rather than left to the client, which would otherwise\nhave to agree with the server about when today is \u2014 and so which episodes\nare out to be marked."
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineItem"
+            },
+            "type": "array",
+            "title": "Episodes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "today",
+          "episodes"
+        ],
+        "title": "Timeline"
+      },
+      "TimelineItem": {
+        "properties": {
+          "title_id": {
+            "type": "integer",
+            "title": "Title Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "poster_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Path"
+          },
+          "episode_id": {
+            "type": "integer",
+            "title": "Episode Id"
+          },
+          "season_number": {
+            "type": "integer",
+            "title": "Season Number"
+          },
+          "episode_number": {
+            "type": "integer",
+            "title": "Episode Number"
+          },
+          "episode_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Name"
+          },
+          "air_date": {
+            "type": "string",
+            "title": "Air Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title_id",
+          "name",
+          "poster_path",
+          "episode_id",
+          "season_number",
+          "episode_number",
+          "episode_name",
+          "air_date"
+        ],
+        "title": "TimelineItem",
+        "description": "One unwatched episode, recently out or still to come, of a show with watch history."
       },
       "TitleDetail": {
         "properties": {
@@ -490,6 +558,12 @@
             "type": "array",
             "title": "Unmatched",
             "default": []
+          },
+          "today": {
+            "type": "string",
+            "title": "Today",
+            "description": "Today in UTC, so the client can tell an episode that is out \u2014 and can be\nmarked \u2014 from one that is not, without its own clock.",
+            "default": ""
           }
         },
         "type": "object",
@@ -549,6 +623,11 @@
             "type": "integer",
             "title": "Watch Count",
             "description": "Viewings, so a rewatch is 2 rather than collapsing into \"seen\"."
+          },
+          "marked_here": {
+            "type": "boolean",
+            "title": "Marked Here",
+            "description": "Whether a viewing was marked in upnext, and so can be unmarked."
           }
         },
         "type": "object",
@@ -558,7 +637,8 @@
           "episode_number",
           "name",
           "air_date",
-          "watch_count"
+          "watch_count",
+          "marked_here"
         ],
         "title": "TitleEpisode"
       },

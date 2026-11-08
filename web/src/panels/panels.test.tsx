@@ -12,8 +12,9 @@ import { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createQueryClient } from "@/lib/queries";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Airing, AiringItem, Config, Stats, TitleDetail, TitleSummary, UpNextItem } from "@/lib/api";
+import type { Config, Stats, Timeline, TimelineItem, TitleDetail, TitleSummary, UpNextItem } from "@/lib/api";
 import { Library } from "@/panels/Library";
+import { Timeline as TimelinePanel } from "@/panels/Timeline";
 import { Stats as StatsPanel } from "@/panels/Stats";
 import { Title as TitlePanel } from "@/panels/Title";
 import { UpNext } from "@/panels/UpNext";
@@ -57,7 +58,7 @@ const NEXT_UP: UpNextItem = {
 
 const TODAY = "2099-01-01";
 
-const LASSO: AiringItem = {
+const LASSO: TimelineItem = {
   title_id: 7,
   name: "Ted Lasso",
   poster_path: "/lasso.jpg",
@@ -68,13 +69,15 @@ const LASSO: AiringItem = {
   air_date: TODAY,
 };
 
-/** Two episodes a week apart, so they group as two days rather than one. */
-const AIRING: Airing = {
+/** Out yesterday, out today, and a week away: three days, two of them markable. */
+const TIMELINE: Timeline = {
   today: TODAY,
-  episodes: [LASSO, { ...LASSO, episode_id: 902, episode_number: 6, episode_name: null, air_date: "2099-01-08" }],
+  episodes: [
+    { ...LASSO, episode_id: 900, episode_number: 4, episode_name: "Smoke and Mirrors", air_date: "2098-12-31" },
+    LASSO,
+    { ...LASSO, episode_id: 902, episode_number: 6, episode_name: null, air_date: "2099-01-08" },
+  ],
 };
-
-const NOTHING_AIRING: Airing = { today: TODAY, episodes: [] };
 
 const STATS: Stats = {
   watches: 4471,
@@ -96,8 +99,13 @@ class Fails {
 
 /** Answer each endpoint the panels call, and fail loudly on one nobody stubbed. */
 function stubFetch(routes: Record<string, unknown>) {
-  vi.stubGlobal("fetch", (input: string) => {
+  writes = [];
+  vi.stubGlobal("fetch", (input: string, init?: RequestInit) => {
     const path = new URL(input, "http://localhost").pathname;
+    if (init?.method && init.method !== "GET") {
+      writes.push(`${init.method} ${path}`);
+      return Promise.resolve({ ok: true, status: 204 } as Response);
+    }
     const body = routes[path] ?? (path === "/api/config" ? CONFIG : undefined);
     if (body === undefined) throw new Error(`No stub for ${path}`);
     if (body instanceof Fails) {
@@ -132,6 +140,8 @@ function drawTitle(detail: TitleDetail) {
 }
 
 let client: QueryClient;
+/** Every POST and DELETE the panel sent, as "METHOD /path". */
+let writes: string[] = [];
 
 /** An absent section proves nothing until the request behind it has settled. */
 async function settled(key: string) {
@@ -142,7 +152,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("UpNext", () => {
   it("shows the next episode of each show in progress", async () => {
-    stubFetch({ "/api/up-next": [NEXT_UP], "/api/airing": NOTHING_AIRING });
+    stubFetch({ "/api/up-next": [NEXT_UP] });
     draw(<UpNext />);
 
     expect(await screen.findByText("Avatar: The Last Airbender")).toBeTruthy();
@@ -152,68 +162,22 @@ describe("UpNext", () => {
   });
 
   it("says so when nothing is in progress, rather than showing an empty grid", async () => {
-    stubFetch({ "/api/up-next": [], "/api/airing": NOTHING_AIRING });
+    stubFetch({ "/api/up-next": [] });
     draw(<UpNext />);
 
     expect(await screen.findByText("Nothing in progress")).toBeTruthy();
   });
 
-  it("lists what is coming, grouped by the day it airs", async () => {
-    stubFetch({ "/api/up-next": [NEXT_UP], "/api/airing": AIRING });
+  it("marks the next episode from the shelf", async () => {
+    stubFetch({ "/api/up-next": [NEXT_UP] });
     draw(<UpNext />);
 
-    expect(await screen.findByText("Airing next")).toBeTruthy();
-    // Two episodes a week apart are two headings, not one list of two rows.
-    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(2);
-    expect(screen.getByText("S04E05")).toBeTruthy();
-    expect(screen.getByText("Riches of Embarrassment")).toBeTruthy();
-  });
-
-  it("lists every episode of a season that lands at once", async () => {
-    const sameDay = {
-      today: TODAY,
-      episodes: [1, 2, 3].map((n) => ({
-        ...LASSO,
-        episode_id: 950 + n,
-        episode_number: n,
-        episode_name: `Episode ${n}`,
-        air_date: "2099-02-01",
-      })),
-    };
-    stubFetch({ "/api/up-next": [NEXT_UP], "/api/airing": sameDay });
-    draw(<UpNext />);
-
-    // One day, three rows — not one row claiming three episodes.
-    expect(await screen.findByText("S04E01")).toBeTruthy();
-    expect(screen.getByText("S04E03")).toBeTruthy();
-    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(1);
-    expect(screen.getAllByText("Ted Lasso")).toHaveLength(3);
-  });
-
-  it("leaves the calendar out entirely when nothing is scheduled", async () => {
-    // An "Airing next" heading over blank space reads as a failure. Having
-    // nothing coming is ordinary — most of a library is finished shows.
-    stubFetch({ "/api/up-next": [NEXT_UP], "/api/airing": NOTHING_AIRING });
-    draw(<UpNext />);
-
-    expect(await screen.findByText("Avatar: The Last Airbender")).toBeTruthy();
-    await settled("airing");
-    expect(screen.queryByText("Airing next")).toBeNull();
-  });
-
-  it("keeps the shelf when only the calendar fails", async () => {
-    // The page is for the shelf. A calendar that will not load is not worth
-    // replacing it with an error.
-    stubFetch({ "/api/up-next": [NEXT_UP], "/api/airing": new Fails() });
-    draw(<UpNext />);
-
-    expect(await screen.findByText("Avatar: The Last Airbender")).toBeTruthy();
-    await settled("airing");
-    expect(screen.queryByText("Airing next")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Mark S02E02 watched" }));
+    await waitFor(() => expect(writes).toEqual(["POST /api/episodes/44/watch"]));
   });
 
   it("shows the server's own words when the request fails", async () => {
-    stubFetch({ "/api/up-next": new Fails({ detail: "the library is locked" }), "/api/airing": NOTHING_AIRING });
+    stubFetch({ "/api/up-next": new Fails({ detail: "the library is locked" }) });
     draw(<UpNext />);
 
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", expect.stringContaining("locked"));
@@ -221,12 +185,64 @@ describe("UpNext", () => {
 
   it("shows the status line, not a list, when validation fails", async () => {
     // FastAPI's 422 carries `detail` as a list of objects.
-    stubFetch({ "/api/up-next": new Fails({ detail: [{ msg: "bad" }] }, 422), "/api/airing": NOTHING_AIRING });
+    stubFetch({ "/api/up-next": new Fails({ detail: [{ msg: "bad" }] }, 422) });
     draw(<UpNext />);
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("422 Unprocessable Entity");
     expect(alert.textContent).not.toContain("[object Object]");
+  });
+});
+
+describe("Timeline", () => {
+  it("lists unwatched episodes by the day they air", async () => {
+    stubFetch({ "/api/timeline": TIMELINE });
+    draw(<TimelinePanel />);
+
+    expect(await screen.findByText("Yesterday")).toBeTruthy();
+    expect(screen.getByText("Today")).toBeTruthy();
+    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(3);
+    expect(screen.getByText("Riches of Embarrassment")).toBeTruthy();
+  });
+
+  it("offers to mark what is out, and only that", async () => {
+    stubFetch({ "/api/timeline": TIMELINE });
+    draw(<TimelinePanel />);
+
+    await screen.findByText("Yesterday");
+    expect(screen.getByRole("button", { name: "Mark S04E04 watched" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mark S04E05 watched" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Mark S04E06 watched" })).toBeNull();
+  });
+
+  it("sends the mark, and refetches rather than following the link", async () => {
+    stubFetch({ "/api/timeline": TIMELINE });
+    draw(<TimelinePanel />);
+
+    // The row is a link; `false` is the click's default prevented, so it was not followed.
+    expect(fireEvent.click(await screen.findByRole("button", { name: "Mark S04E05 watched" }))).toBe(false);
+    await waitFor(() => expect(writes).toEqual(["POST /api/episodes/901/watch"]));
+  });
+
+  it("lists every episode of a season that lands at once", async () => {
+    const sameDay = {
+      today: TODAY,
+      episodes: [1, 2, 3].map((n) => ({ ...LASSO, episode_id: 950 + n, episode_number: n, air_date: TODAY })),
+    };
+    stubFetch({ "/api/timeline": sameDay });
+    draw(<TimelinePanel />);
+
+    // One day, three rows, each its own button.
+    expect(await screen.findByText("S04E01")).toBeTruthy();
+    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /^Mark S04E0\d watched$/ })).toHaveLength(3);
+  });
+
+  it("says when there is nothing to mark or wait for", async () => {
+    stubFetch({ "/api/timeline": { today: TODAY, episodes: [] } });
+    draw(<TimelinePanel />);
+
+    expect(await screen.findByText("All caught up")).toBeTruthy();
   });
 });
 
@@ -344,6 +360,7 @@ describe("Title", () => {
     overview: "Six friends.",
     air_status: "Ended",
     rating: 10,
+    today: "2026-09-01",
     episodes: [
       {
         id: 1,
@@ -352,6 +369,7 @@ describe("Title", () => {
         name: "The One Where It Begins",
         air_date: "1994-09-22",
         watch_count: 2,
+        marked_here: false,
       },
       {
         id: 2,
@@ -360,10 +378,31 @@ describe("Title", () => {
         name: "The One With The Reunion",
         air_date: "2004-05-06",
         watch_count: 1,
+        marked_here: false,
       },
     ],
     unmatched: [{ season_number: 6, episode_number: 25, watch_count: 1, last_watched_at: "2018-06-01 00:00:00" }],
   };
+
+  it("offers to mark an aired, unwatched episode and to unmark one marked here", async () => {
+    const episode = DETAIL.episodes[0]!;
+    drawTitle({
+      ...DETAIL,
+      episodes: [
+        { ...episode, id: 5, episode_number: 5, watch_count: 0 },
+        { ...episode, id: 6, episode_number: 6, watch_count: 1, marked_here: true },
+        { ...episode, id: 7, episode_number: 7, watch_count: 0, air_date: "2026-09-02" },
+        { ...episode, id: 8, episode_number: 8, watch_count: 1 },
+      ],
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Mark S01E05 watched" }));
+    fireEvent.click(screen.getByRole("button", { name: "Unmark S01E06" }));
+    await waitFor(() => expect(writes).toEqual(["POST /api/episodes/5/watch", "DELETE /api/episodes/6/watch"]));
+    // Not out yet, and imported history: neither has a button.
+    expect(screen.queryByRole("button", { name: /S01E07/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /S01E08/ })).toBeNull();
+  });
 
   it("accounts for the viewings TMDB's list does not contain", async () => {
     drawTitle(DETAIL);
@@ -421,6 +460,7 @@ describe("a show numbered wholly differently", () => {
       overview: null,
       air_status: null,
       rating: null,
+      today: "2026-09-01",
       episodes: [],
       unmatched: MANY,
     });

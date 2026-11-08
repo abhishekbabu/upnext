@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -112,18 +112,20 @@ def test_the_shelf_payload_stays_lean(api: TestClient) -> None:
 
 
 @pytest.fixture
-def airing_api(tmp_path: Path, serve: Serve) -> TestClient:
+def timeline_api(tmp_path: Path, serve: Serve) -> TestClient:
     """One watched show with a past and a future episode, and one never watched.
 
     Its own fixture rather than the shared one because the calendar is the only
     thing it asserts, and adding a future episode to `Friends` would change what
     every other test there counts.
     """
-    db_path = tmp_path / "airing.db"
+    db_path = tmp_path / "timeline.db"
+    recent = (datetime.now(UTC).date() - timedelta(days=5)).isoformat()
     with open_library(db_path) as library:
         lasso = library.upsert_title(Title(name="Ted Lasso", tmdb_id=97546))
         library.set_state(lasso, TitleState(status=Status.STOPPED))
         library.upsert_episode(lasso, Episode(season_number=1, episode_number=1, air_date="2000-01-01"))
+        library.upsert_episode(lasso, Episode(season_number=4, episode_number=4, air_date=recent))
         library.upsert_episode(
             lasso, Episode(season_number=4, episode_number=5, name="Riches of Embarrassment", air_date="2099-01-01")
         )
@@ -136,18 +138,35 @@ def airing_api(tmp_path: Path, serve: Serve) -> TestClient:
     return serve(db_path)
 
 
-def test_airing_lists_only_future_episodes_of_watched_shows(airing_api: TestClient) -> None:
-    episodes = airing_api.get("/api/airing").json()["episodes"]
+def test_the_timeline_is_the_last_month_and_what_is_coming_of_watched_shows(timeline_api: TestClient) -> None:
+    episodes = timeline_api.get("/api/timeline").json()["episodes"]
     assert [(e["name"], e["season_number"], e["episode_number"]) for e in episodes] == [
+        ("Ted Lasso", 4, 4),
         ("Ted Lasso", 4, 5),
         ("Ted Lasso", 4, 6),
     ]
-    assert (episodes[0]["air_date"], episodes[0]["episode_name"]) == ("2099-01-01", "Riches of Embarrassment")
+    assert (episodes[1]["air_date"], episodes[1]["episode_name"]) == ("2099-01-01", "Riches of Embarrassment")
 
 
-def test_airing_says_which_day_it_counted_from(airing_api: TestClient) -> None:
+def test_marking_an_episode_takes_it_off_the_timeline_and_unmarking_puts_it_back(timeline_api: TestClient) -> None:
+    out_now = timeline_api.get("/api/timeline").json()["episodes"][0]["episode_id"]
+
+    assert timeline_api.post(f"/api/episodes/{out_now}/watch").status_code == 204
+    assert out_now not in [e["episode_id"] for e in timeline_api.get("/api/timeline").json()["episodes"]]
+
+    assert timeline_api.delete(f"/api/episodes/{out_now}/watch").status_code == 204
+    assert out_now in [e["episode_id"] for e in timeline_api.get("/api/timeline").json()["episodes"]]
+
+
+def test_marking_or_unmarking_what_is_not_there_is_a_404(timeline_api: TestClient) -> None:
+    assert timeline_api.post("/api/episodes/9999/watch").status_code == 404
+    out_now = timeline_api.get("/api/timeline").json()["episodes"][0]["episode_id"]
+    assert timeline_api.delete(f"/api/episodes/{out_now}/watch").status_code == 404
+
+
+def test_the_timeline_says_which_day_it_is(timeline_api: TestClient) -> None:
     """The client labels "Today" and "Tomorrow" against this, not its own clock."""
-    assert airing_api.get("/api/airing").json()["today"] == datetime.now(UTC).date().isoformat()
+    assert timeline_api.get("/api/timeline").json()["today"] == datetime.now(UTC).date().isoformat()
 
 
 @pytest.fixture
