@@ -112,6 +112,39 @@
             }
           }
         }
+      },
+      "delete": {
+        "summary": "Remove Title",
+        "description": "Remove a title nobody has watched; imports then leave it out. One with viewings is a 409.",
+        "operationId": "remove_title_api_titles__title_id__delete",
+        "parameters": [
+          {
+            "name": "title_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMaximum": 9223372036854775808,
+              "exclusiveMinimum": 0,
+              "title": "Title Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/titles/{title_id}/status": {
@@ -601,6 +634,11 @@
             "title": "Rating",
             "description": "Out of 10. A TV Time rating out of 5 is doubled on import."
           },
+          "viewings": {
+            "type": "integer",
+            "title": "Viewings",
+            "description": "Every viewing recorded. A title with none can be removed."
+          },
           "episodes": {
             "items": {
               "$ref": "#/components/schemas/TitleEpisode"
@@ -637,7 +675,8 @@
           "enriched_at",
           "overview",
           "air_status",
-          "rating"
+          "rating",
+          "viewings"
         ],
         "title": "TitleDetail"
       },

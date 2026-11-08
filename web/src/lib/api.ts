@@ -67,6 +67,7 @@ export const api = {
   timeline: () => request<Timeline>("/api/timeline"),
   markWatched: (episodeId: number) => request<void>(`/api/episodes/${episodeId}/watch`, "POST"),
   unmarkWatched: (episodeId: number) => request<void>(`/api/episodes/${episodeId}/watch`, "DELETE"),
+  removeTitle: (titleId: number) => request<void>(`/api/titles/${titleId}`, "DELETE"),
   setStatus: ({ titleId, status }: { titleId: number; status: Status }) =>
     request<void>(`/api/titles/${titleId}/status`, "PUT", { status }),
   stats: () => request<Stats>("/api/stats"),

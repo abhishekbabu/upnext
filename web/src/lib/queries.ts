@@ -66,6 +66,15 @@ export function useWatch() {
   return { mark, unmark };
 }
 
+/** Remove a title nobody has watched. Every list it was on is refetched. */
+export function useRemoveTitle() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: api.removeTitle,
+    onSuccess: () => client.invalidateQueries({ predicate: (query) => query.queryKey[0] !== "config" }),
+  });
+}
+
 /** File a title under a status; like a viewing, it moves it between lists everywhere. */
 export function useSetStatus() {
   const client = useQueryClient();

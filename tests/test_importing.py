@@ -54,3 +54,15 @@ def test_the_summary_counts_statuses_in_enum_order() -> None:
 def test_a_status_with_nothing_in_it_is_left_out() -> None:
     summary = summarize([ImportedTitle(title=Title(name="Arrow"), state=TitleState(status=Status.STOPPED))])
     assert summary.by_status == {Status.STOPPED: 1}
+
+
+def test_a_removed_title_is_not_imported_again(export_dir: Path, library: Library) -> None:
+    import_export(TVTimeExport(), library, export_dir)
+    beyblade = next(t for t in library.titles() if t.name == "Beyblade")
+    library.conn.execute("DELETE FROM watches WHERE title_id = ?", (beyblade.id,))
+    library.remove_title(beyblade.id, removed_at="2026-11-08T00:00:00+00:00")
+
+    summary = import_export(TVTimeExport(), library, export_dir)
+
+    assert "Beyblade" not in [t.name for t in library.titles()]
+    assert summary.titles == len(library.titles())

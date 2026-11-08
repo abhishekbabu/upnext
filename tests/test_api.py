@@ -257,3 +257,12 @@ def test_a_status_can_be_set_and_is_rejected_when_unknown(api: TestClient) -> No
     assert api.get(f"/api/titles/{arrow['id']}").json()["status"] == "watch_later"
     assert api.put(f"/api/titles/{arrow['id']}/status", json={"status": "paused"}).status_code == 422
     assert api.put("/api/titles/9999/status", json={"status": "watching"}).status_code == 404
+
+
+def test_a_title_can_be_removed_only_while_nobody_has_watched_it(api: TestClient) -> None:
+    titles = {t["name"]: t["id"] for t in api.get("/api/titles").json()}
+    assert api.get(f"/api/titles/{titles['Arrow']}").json()["viewings"] == 0
+    assert api.delete(f"/api/titles/{titles['Friends']}").status_code == 409
+    assert api.delete(f"/api/titles/{titles['Arrow']}").status_code == 204
+    assert api.get(f"/api/titles/{titles['Arrow']}").status_code == 404
+    assert api.delete(f"/api/titles/{titles['Arrow']}").status_code == 404

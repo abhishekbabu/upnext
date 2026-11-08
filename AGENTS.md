@@ -110,6 +110,10 @@ status chosen in the app (or set by marking) is `status_pinned`, and a re-import
 leaves it alone. Schema changes to an existing table go in `db._upgrade`,
 counted by `PRAGMA user_version`.
 
+**Removing a title never removes history.** Only a title with no viewings can be
+removed (`remove_title`, else `RemovalError`), and `removed_titles` remembers it
+so `import_export` leaves it out of every later import.
+
 **The web layer's connections cross threads.** `open_library(...,
 same_thread_only=False)` in `get_library`, and nowhere else. FastAPI hands the
 dependency, the endpoint and the teardown three separately borrowed threadpool

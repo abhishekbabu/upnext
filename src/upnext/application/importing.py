@@ -37,12 +37,13 @@ def import_export(source: ImportSource, library: WatchLibrary, export_dir: Path)
     """Read an export and write all of it, returning what the export holds.
 
     What it holds, not what changed: a re-import writes nothing and reports
-    the same figures.
+    the same figures. Titles removed from the library are left out of both.
 
     Raises:
         ExportError: the folder is not an export this source recognises.
     """
-    imported = source.read(export_dir)
+    # A title removed from the library stays removed, though the export lists it.
+    imported = [item for item in source.read(export_dir) if not library.was_removed(item.title)]
     for item in imported:
         title_id = library.upsert_title(item.title)
         library.set_state(title_id, item.state)

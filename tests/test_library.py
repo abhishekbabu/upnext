@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from upnext.adapters.outbound.store.library import Library, open_library
-from upnext.domain.errors import NotFoundError
+from upnext.domain.errors import NotFoundError, RemovalError
 from upnext.domain.models import Episode, Kind, Status, Title, TitleState, Watch
 
 
@@ -350,3 +350,33 @@ def test_up_next_leaves_out_a_next_episode_that_is_not_out(library: Library) -> 
         library.link_watches(title_id)
 
     assert [(row.name, row.season_number) for row in library.up_next(today=TODAY)] == [("The Pitt", 2)]
+
+
+def test_a_title_nobody_watched_can_be_removed_and_stays_removed(library: Library) -> None:
+    expanse = a_show(library, name="The Expanse", tvdb_id=280619)
+    library.set_state(expanse, TitleState(status=Status.STOPPED))
+    library.upsert_episode(expanse, Episode(season_number=1, episode_number=1))
+
+    library.remove_title(expanse, removed_at="2026-11-08T00:00:00+00:00")
+
+    assert library.title(expanse) is None
+    assert library.conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0] == 0
+    assert library.was_removed(Title(name="Expanse, The", tvdb_id=280619))
+    assert not library.was_removed(Title(name="The Expanse", tvdb_id=1))
+    # Without a TheTVDB id, name and year are what an import has to go on.
+    assert library.was_removed(Title(name="The Expanse"))
+    assert not library.was_removed(Title(name="The Expanse", year=2015))
+
+
+def test_a_title_with_viewings_cannot_be_removed(library: Library) -> None:
+    title_id = a_show(library, tvdb_id=79168)
+    library.record_watch(title_id, Watch(watched_at="2018-05-12 01:10:14"))  # unnumbered still counts
+    assert library.title(title_id).viewings == 1
+    with pytest.raises(RemovalError):
+        library.remove_title(title_id, removed_at="2026-11-08T00:00:00+00:00")
+    assert library.title(title_id) is not None
+
+
+def test_removing_a_title_that_does_not_exist_says_so(library: Library) -> None:
+    with pytest.raises(NotFoundError):
+        library.remove_title(999, removed_at="2026-11-08T00:00:00+00:00")

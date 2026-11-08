@@ -49,7 +49,11 @@ export interface paths {
         get: operations["get_title_api_titles__title_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Remove Title
+         * @description Remove a title nobody has watched; imports then leave it out. One with viewings is a 409.
+         */
+        delete: operations["remove_title_api_titles__title_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -293,6 +297,11 @@ export interface components {
              */
             rating: number | null;
             /**
+             * Viewings
+             * @description Every viewing recorded. A title with none can be removed.
+             */
+            viewings: number;
+            /**
              * Episodes
              * @default []
              */
@@ -508,6 +517,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TitleDetail"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_title_api_titles__title_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                title_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
