@@ -403,7 +403,7 @@ class Library:
         return [_from_row(ShelfEpisode, row) for row in rows]
 
     def timeline(self, since: str) -> list[ShelfEpisode]:
-        """Unwatched episodes airing on or after `since`, of shows with watch history, by air date.
+        """Unwatched episodes airing on or after `since`, of shows being followed, by air date.
 
         A schedule rather than a backlog, which is why it is a separate query
         from `up_next`: that one answers "what do I put on now" and is ordered
@@ -411,10 +411,13 @@ class Library:
         lately, and what is coming" and is ordered by the calendar. Watched
         episodes leave it, so it is a list to work down as episodes land.
 
-        "Shows I have seen" is watch history rather than `status`, because
-        status does not survive contact with a real library — a show whose new
-        season is a month out is usually filed `stopped` or `completed`, having
-        been finished. History is the fact; the status is an opinion about it.
+        "Followed" is two facts together: some watch history, and a status of
+        `watching` or `watchlist`. History keeps out shows never started;
+        status keeps out what was stopped or archived — `completed` is what TV
+        Time's archive becomes, and people archive shows they gave up on as
+        often as ones they finished. A finished show waiting on a new season
+        stays followed at the source, and marking one of its episodes here
+        refiles it `watching`.
 
         `since` is the caller's, not `date('now')`, so the boundary it draws can
         be pinned in a test.
@@ -425,13 +428,14 @@ class Library:
             -- Air dates are stored as the catalog wrote them, always YYYY-MM-DD,
             -- so lexicographic order is chronological order. A null air date is
             -- an episode TMDB has not scheduled, and never compares true here.
+            JOIN title_state s ON s.title_id = t.id AND s.status IN (?, ?)
             WHERE e.air_date >= ?
               AND e.season_number > 0
               AND EXISTS (SELECT 1 FROM watches w WHERE w.title_id = t.id)
               AND NOT EXISTS (SELECT 1 FROM watches w WHERE w.episode_id = e.id)
             ORDER BY e.air_date, t.name, e.season_number, e.episode_number
             """,
-            (since,),
+            (Status.WATCHING, Status.WATCHLIST, since),
         ).fetchall()
         return [_from_row(ShelfEpisode, row) for row in rows]
 

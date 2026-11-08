@@ -13,6 +13,12 @@ def a_show(library: Library, name: str = "Friends", **kwargs) -> int:
     return library.upsert_title(Title(name=name, kind=Kind.SHOW, **kwargs))
 
 
+def a_followed_show(library: Library, name: str = "Friends") -> int:
+    title_id = a_show(library, name=name)
+    library.set_state(title_id, TitleState(status=Status.WATCHING))
+    return title_id
+
+
 def test_a_title_is_matched_by_tvdb_id_not_duplicated(library: Library) -> None:
     first = a_show(library, tvdb_id=79168)
     second = library.upsert_title(Title(name="Friends", kind=Kind.SHOW, tvdb_id=79168, year=1994))
@@ -140,7 +146,7 @@ TODAY = "2026-06-15"
 
 def test_the_timeline_starts_where_it_is_told(library: Library) -> None:
     """The day given is in; the day before it is the backlog's."""
-    title_id = a_show(library)
+    title_id = a_followed_show(library)
     library.upsert_episode(title_id, Episode(season_number=1, episode_number=1, air_date="2026-06-14"))
     library.upsert_episode(title_id, Episode(season_number=1, episode_number=2, air_date=TODAY))
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
@@ -149,19 +155,20 @@ def test_the_timeline_starts_where_it_is_told(library: Library) -> None:
     assert [row.air_date for row in timeline] == [TODAY]
 
 
-def test_the_timeline_covers_shows_watched_whatever_their_status(library: Library) -> None:
-    """A show returning after a break is filed `stopped` or `completed`, not `watching`.
+def test_the_timeline_is_for_shows_still_followed(library: Library) -> None:
+    """Stopped and archived shows stay off it; a watchlisted one already started is on it."""
+    for name, status in [
+        ("Stick", Status.WATCHING),
+        ("Percy Jackson", Status.WATCHLIST),
+        ("Last Week Tonight", Status.COMPLETED),
+        ("Ted Lasso", Status.STOPPED),
+    ]:
+        title_id = a_show(library, name=name)
+        library.set_state(title_id, TitleState(status=status))
+        library.upsert_episode(title_id, Episode(season_number=2, episode_number=1, air_date="2026-07-01"))
+        library.record_watch(title_id, Watch(watched_at="2023-01-01 00:00:00", episode=(1, 1)))
 
-    Status is an opinion about a show; a watch is a fact. Filtering on status
-    would empty this list of exactly the shows it exists to surface.
-    """
-    stopped = a_show(library, name="Ted Lasso")
-    library.set_state(stopped, TitleState(status=Status.STOPPED))
-    library.upsert_episode(stopped, Episode(season_number=4, episode_number=5, air_date="2026-07-01"))
-    library.record_watch(stopped, Watch(watched_at="2023-01-01 00:00:00", episode=(1, 1)))
-
-    timeline = library.timeline(since=TODAY)
-    assert [row.name for row in timeline] == ["Ted Lasso"]
+    assert [row.name for row in library.timeline(since=TODAY)] == ["Percy Jackson", "Stick"]
 
 
 def test_the_timeline_ignores_a_show_never_watched(library: Library) -> None:
@@ -179,7 +186,7 @@ def test_the_timeline_ignores_a_show_never_watched(library: Library) -> None:
 
 def test_the_timeline_skips_specials_and_episodes_with_no_date(library: Library) -> None:
     """Season 0 is never the next thing to watch, and an undated episode is unscheduled."""
-    title_id = a_show(library)
+    title_id = a_followed_show(library)
     library.upsert_episode(title_id, Episode(season_number=0, episode_number=1, air_date="2026-07-01"))
     library.upsert_episode(title_id, Episode(season_number=2, episode_number=1, air_date=None))
     library.upsert_episode(title_id, Episode(season_number=2, episode_number=2, air_date="2026-07-02"))
@@ -192,7 +199,7 @@ def test_the_timeline_skips_specials_and_episodes_with_no_date(library: Library)
 def test_the_timeline_is_ordered_by_the_calendar_across_shows(library: Library) -> None:
     """The soonest episode leads, whichever show it belongs to."""
     for name, air_date in [("Stick", "2026-11-03"), ("Chad Powers", "2026-09-03"), ("Shark Tank", "2026-09-30")]:
-        title_id = a_show(library, name=name)
+        title_id = a_followed_show(library, name=name)
         library.upsert_episode(title_id, Episode(season_number=2, episode_number=1, air_date=air_date))
         library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
 
@@ -225,7 +232,7 @@ def test_the_schema_accepts_every_status_the_domain_has(library: Library) -> Non
 
 
 def test_an_episode_leaves_the_timeline_once_watched(library: Library) -> None:
-    title_id = a_show(library)
+    title_id = a_followed_show(library)
     library.upsert_episode(title_id, Episode(season_number=2, episode_number=1, air_date=TODAY))
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
     (episode,) = library.timeline(since=TODAY)

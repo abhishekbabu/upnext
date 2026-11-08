@@ -97,10 +97,10 @@ that" relation, so an automatic version would be a name search and a hope.
 **A backlog and a schedule are different questions.** `up_next` is the lowest
 unwatched episode of what is in progress; `timeline` is unwatched episodes from
 the last month (`RECENT` in `api.py`) and everything scheduled, by air date — the
-home page. Never merge them. `timeline` selects on watch history, not `status` —
-a show returning after a break is filed `completed` or `stopped`, so a status
-filter empties the list of its whole point — and it takes `since` as an argument
-rather than reading the clock, so the boundary it draws can be tested.
+home page. Never merge them. `timeline` takes shows with watch history *and* a
+status of `watching` or `watchlist`: `stopped` and `completed` (TV Time's archive,
+used for shows dropped as often as finished) stay off it. It takes `since` as an
+argument rather than reading the clock, so the boundary it draws can be tested.
 
 **Viewings marked in the app** are `source = APP_SOURCE`, linked straight to the
 episode and recorded in the catalog's numbering. Only those can be unmarked:
