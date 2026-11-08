@@ -15,14 +15,16 @@ class Kind(StrEnum):
 class Status(StrEnum):
     """Where a title sits for the user.
 
-    Deliberately four buckets and no "unwatched": a title with no relationship
-    to the user has no state row at all. Declared in the order a library is
-    read — what you are on, then the rest — which is the order every count of
-    them is listed in.
+    No "unwatched": a title with no relationship to the user has no state row
+    at all. Declared in the order a library is read — what you are on, then
+    the rest — which is the order every count of them is listed in.
     """
 
     WATCHING = "watching"
+    WATCH_LATER = "watch_later"
+    """Started, and paused rather than dropped. Off the timeline until resumed."""
     WATCHLIST = "watchlist"
+    """Not started yet; meant to be."""
     COMPLETED = "completed"
     STOPPED = "stopped"
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -155,11 +156,12 @@ def test_the_timeline_starts_where_it_is_told(library: Library) -> None:
     assert [row.air_date for row in timeline] == [TODAY]
 
 
-def test_the_timeline_is_for_shows_still_followed(library: Library) -> None:
-    """Stopped and archived shows stay off it; a watchlisted one already started is on it."""
+def test_the_timeline_is_for_shows_being_watched(library: Library) -> None:
+    """Paused, unstarted, stopped and archived shows stay off it, history or not."""
     for name, status in [
         ("Stick", Status.WATCHING),
-        ("Percy Jackson", Status.WATCHLIST),
+        ("Percy Jackson", Status.WATCH_LATER),
+        ("Reacher", Status.WATCHLIST),
         ("Last Week Tonight", Status.COMPLETED),
         ("Ted Lasso", Status.STOPPED),
     ]:
@@ -168,7 +170,7 @@ def test_the_timeline_is_for_shows_still_followed(library: Library) -> None:
         library.upsert_episode(title_id, Episode(season_number=2, episode_number=1, air_date="2026-07-01"))
         library.record_watch(title_id, Watch(watched_at="2023-01-01 00:00:00", episode=(1, 1)))
 
-    assert [row.name for row in library.timeline(since=TODAY)] == ["Percy Jackson", "Stick"]
+    assert [row.name for row in library.timeline(since=TODAY)] == ["Stick"]
 
 
 def test_the_timeline_ignores_a_show_never_watched(library: Library) -> None:
@@ -281,3 +283,58 @@ def test_unmarking_takes_back_only_what_upnext_marked(library: Library) -> None:
 def test_marking_an_episode_that_does_not_exist_says_so(library: Library) -> None:
     with pytest.raises(NotFoundError):
         library.mark_watched(999, watched_at="2026-06-15 21:00:00")
+
+
+def test_a_status_chosen_in_upnext_survives_a_re_import(library: Library) -> None:
+    title_id = a_show(library)
+    library.set_state(title_id, TitleState(status=Status.WATCHLIST, rating=6))
+
+    library.set_status(title_id, Status.WATCH_LATER)
+    library.set_state(title_id, TitleState(status=Status.WATCHLIST, rating=8))
+
+    row = library.title(title_id)
+    assert (row.status, row.rating) == (Status.WATCH_LATER, 8)
+
+
+def test_marking_an_episode_also_pins_the_status(library: Library) -> None:
+    title_id = a_show(library)
+    library.set_state(title_id, TitleState(status=Status.STOPPED))
+    library.upsert_episode(title_id, Episode(season_number=2, episode_number=1))
+    (episode,) = library.episodes(title_id)
+
+    library.mark_watched(episode.id, watched_at="2026-06-15 21:00:00")
+    library.set_state(title_id, TitleState(status=Status.STOPPED))
+
+    assert library.title(title_id).status is Status.WATCHING
+
+
+def test_setting_the_status_of_a_title_that_does_not_exist_says_so(library: Library) -> None:
+    with pytest.raises(NotFoundError):
+        library.set_status(999, Status.WATCHING)
+
+
+def test_a_library_from_before_watch_later_is_upgraded_in_place(tmp_path: Path) -> None:
+    """The status CHECK changed, and SQLite cannot alter a CHECK: the table is rebuilt."""
+    db_path = tmp_path / "old.db"
+    with open_library(db_path) as library:
+        library.upsert_title(Title(name="Percy Jackson"))
+    old = sqlite3.connect(db_path)
+    old.executescript("""
+        DROP TABLE title_state;
+        CREATE TABLE title_state (
+            title_id INTEGER PRIMARY KEY REFERENCES titles (id) ON DELETE CASCADE,
+            status TEXT NOT NULL CHECK (status IN ('watching', 'completed', 'watchlist', 'stopped')),
+            is_favorite INTEGER NOT NULL DEFAULT 0, rating INTEGER, reported_watched INTEGER,
+            followed_at TEXT, updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO title_state (title_id, status, rating) VALUES (1, 'watchlist', 8);
+        PRAGMA user_version = 0;
+    """)
+    old.close()
+
+    with open_library(db_path) as library:
+        library.set_status(1, Status.WATCH_LATER)
+        row = library.title(1)
+        assert (row.status, row.rating) == (Status.WATCH_LATER, 8)
+    with open_library(db_path) as library:
+        assert library.conn.execute("PRAGMA user_version").fetchone()[0] == 1

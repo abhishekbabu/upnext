@@ -55,6 +55,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/titles/{title_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Status
+         * @description File a title under a status. Kept over whatever a later re-import says.
+         */
+        put: operations["set_status_api_titles__title_id__status_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/up-next": {
         parameters: {
             query?: never;
@@ -181,13 +201,16 @@ export interface components {
          * Status
          * @description Where a title sits for the user.
          *
-         *     Deliberately four buckets and no "unwatched": a title with no relationship
-         *     to the user has no state row at all. Declared in the order a library is
-         *     read — what you are on, then the rest — which is the order every count of
-         *     them is listed in.
+         *     No "unwatched": a title with no relationship to the user has no state row
+         *     at all. Declared in the order a library is read — what you are on, then
+         *     the rest — which is the order every count of them is listed in.
          * @enum {string}
          */
-        Status: "watching" | "watchlist" | "completed" | "stopped";
+        Status: "watching" | "watch_later" | "watchlist" | "completed" | "stopped";
+        /** StatusChange */
+        StatusChange: {
+            status: components["schemas"]["Status"];
+        };
         /** Timeline */
         Timeline: {
             /**
@@ -480,6 +503,39 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TitleDetail"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_status_api_titles__title_id__status_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                title_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StatusChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

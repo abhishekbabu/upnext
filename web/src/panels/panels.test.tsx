@@ -384,6 +384,15 @@ describe("Title", () => {
     unmatched: [{ season_number: 6, episode_number: 25, watch_count: 1, last_watched_at: "2018-06-01 00:00:00" }],
   };
 
+  it("changes the status in place", async () => {
+    drawTitle(DETAIL);
+
+    const picker = await screen.findByRole("combobox", { name: "Status" });
+    expect(picker).toHaveProperty("value", "completed");
+    fireEvent.change(picker, { target: { value: "watch_later" } });
+    await waitFor(() => expect(writes).toEqual(["PUT /api/titles/1/status"]));
+  });
+
   it("offers to mark an aired, unwatched episode and to unmark one marked here", async () => {
     const episode = DETAIL.episodes[0]!;
     drawTitle({

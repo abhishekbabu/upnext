@@ -1,9 +1,9 @@
 import { Fragment, useMemo } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Check, ChevronLeft } from "lucide-react";
-import { StatusBadge } from "@/components/ui/badge";
 import { Poster } from "@/components/ui/poster";
 import { ProgressBar } from "@/components/ui/progress-bar";
+import { StatusPicker } from "@/components/ui/status-picker";
 import { Empty, Failed, Loading } from "@/components/ui/state";
 import { WatchButton } from "@/components/ui/watch-button";
 import type { TitleEpisode, UnmatchedViewing } from "@/lib/api";
@@ -52,7 +52,7 @@ export function Title() {
         <div className="min-w-0 flex-1">
           <h1 className="font-display text-2xl font-semibold tracking-tight">{data.name}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <StatusBadge status={data.status} />
+            <StatusPicker titleId={data.id} status={data.status} />
             {data.year && <span className="font-mono text-[11px] text-muted-foreground">{data.year}</span>}
             {data.air_status && <span className="font-mono text-[11px] text-muted-foreground">{data.air_status}</span>}
             {data.rating !== null && (

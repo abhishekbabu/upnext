@@ -119,3 +119,25 @@ def test_a_show_followed_only_in_the_show_data_is_still_being_watched(export_dir
     flash = {"nb_episodes_seen": "5", "tv_show_name": "The Flash (2014)", "user_id": "1", "tv_show_id": "279121"}
     write_csv(export_dir / "user_tv_show_data.csv", fields, [flash | {"is_followed": "1", "is_favorited": "0"}])
     assert by_name(export_dir)["The Flash"].state.status is Status.WATCHING
+
+
+def test_for_later_means_paused_once_started_and_not_yet_begun_otherwise(export_dir: Path, write_csv) -> None:
+    """TV Time has one "for later" list; whether the show was started tells the two apart."""
+    fields = ["nb_episodes_seen", "tv_show_name", "user_id", "tv_show_id", "is_followed", "is_favorited"]
+    flash = {"nb_episodes_seen": "3", "tv_show_name": "The Flash (2014)", "user_id": "1", "tv_show_id": "279121"}
+    write_csv(export_dir / "user_tv_show_data.csv", fields, [flash | {"is_followed": "1", "is_favorited": "0"}])
+    write_csv(
+        export_dir / "user_show_special_status.csv",
+        ["user_id", "tv_show_id", "status", "created_at", "updated_at", "tv_show_name"],
+        [
+            {
+                "user_id": "1",
+                "tv_show_id": "279121",
+                "status": "for_later",
+                "created_at": "2024-02-26 22:03:16",
+                "updated_at": "2024-02-26 22:03:16",
+                "tv_show_name": "The Flash (2014)",
+            }
+        ],
+    )
+    assert by_name(export_dir)["The Flash"].state.status is Status.WATCH_LATER

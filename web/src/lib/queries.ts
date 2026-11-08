@@ -66,6 +66,15 @@ export function useWatch() {
   return { mark, unmark };
 }
 
+/** File a title under a status; like a viewing, it moves it between lists everywhere. */
+export function useSetStatus() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: api.setStatus,
+    onSuccess: () => client.invalidateQueries({ predicate: (query) => query.queryKey[0] !== "config" }),
+  });
+}
+
 export function useStats() {
   return useQuery({ queryKey: ["stats"], queryFn: api.stats });
 }

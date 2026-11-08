@@ -97,14 +97,18 @@ that" relation, so an automatic version would be a name search and a hope.
 **A backlog and a schedule are different questions.** `up_next` is the lowest
 unwatched episode of what is in progress; `timeline` is unwatched episodes from
 the last month (`RECENT` in `api.py`) and everything scheduled, by air date — the
-home page. Never merge them. `timeline` takes shows with watch history *and* a
-status of `watching` or `watchlist`: `stopped` and `completed` (TV Time's archive,
-used for shows dropped as often as finished) stay off it. It takes `since` as an
-argument rather than reading the clock, so the boundary it draws can be tested.
+home page. Never merge them. Both take shows filed `watching` only: `watch_later`
+(started, paused), `watchlist` (not started), `stopped` and `completed` (TV Time's
+archive, used for shows dropped as often as finished) stay off. `timeline` takes
+`since` as an argument rather than reading the clock, so the boundary it draws
+can be tested.
 
 **Viewings marked in the app** are `source = APP_SOURCE`, linked straight to the
 episode and recorded in the catalog's numbering. Only those can be unmarked:
-imported history is the export's, and a re-import would restore it anyway.
+imported history is the export's, and a re-import would restore it anyway. A
+status chosen in the app (or set by marking) is `status_pinned`, and a re-import
+leaves it alone. Schema changes to an existing table go in `db._upgrade`,
+counted by `PRAGMA user_version`.
 
 **The web layer's connections cross threads.** `open_library(...,
 same_thread_only=False)` in `get_library`, and nowhere else. FastAPI hands the

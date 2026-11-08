@@ -247,3 +247,11 @@ def test_the_client_schema_matches_the_api() -> None:
 
 def test_a_title_id_sqlite_cannot_hold_is_a_422_not_a_500(api: TestClient) -> None:
     assert api.get(f"/api/titles/{2**64}").status_code == 422
+
+
+def test_a_status_can_be_set_and_is_rejected_when_unknown(api: TestClient) -> None:
+    arrow = next(t for t in api.get("/api/titles").json() if t["name"] == "Arrow")
+    assert api.put(f"/api/titles/{arrow['id']}/status", json={"status": "watch_later"}).status_code == 204
+    assert api.get(f"/api/titles/{arrow['id']}").json()["status"] == "watch_later"
+    assert api.put(f"/api/titles/{arrow['id']}/status", json={"status": "paused"}).status_code == 422
+    assert api.put("/api/titles/9999/status", json={"status": "watching"}).status_code == 404
