@@ -132,6 +132,8 @@ a wrong match corrupts the library far more visibly than a missing one.
 which silently swallows a gap when someone skips around. Season 0 is specials at
 every source, so it is never the next thing to watch — but its episodes are still
 stored, and filtered at query time.
+A show is on up next only once that episode has aired (`up_next(today)`); one
+not out, or with no air date yet, is the timeline's.
 
 **The export is not safe to commit.** An export contains live OAuth tokens.
 `.gitignore` covers the usual folder names and `detect-private-key` runs

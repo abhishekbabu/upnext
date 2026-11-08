@@ -378,13 +378,18 @@ class Library:
         ).fetchall()
         return [_from_row(UnmatchedWatch, row) for row in rows]
 
-    def up_next(self) -> list[ShelfEpisode]:
-        """The next unwatched episode of every show currently being watched.
+    def up_next(self, today: str) -> list[ShelfEpisode]:
+        """The next unwatched episode of every show currently being watched, if it is out.
 
         "Next" is the lowest-numbered episode with no watch against it, which
         is the only definition that survives a viewer who skipped around — the
         highest watched episode plus one would silently swallow the gap.
         Season 0 is specials at every source, and never the next thing to watch.
+
+        A show whose next episode has not aired by `today` — or has no air date
+        yet, which is TMDB listing a season it has not scheduled — has nothing
+        to put on now, and is left to the timeline. `today` is the caller's so
+        the boundary can be tested.
         """
         rows = self.conn.execute(
             f"""
@@ -397,9 +402,11 @@ class Library:
                   ORDER BY e2.season_number, e2.episode_number
                   LIMIT 1
               )
+              -- YYYY-MM-DD compares as text; a null air date never passes.
+              AND e.air_date <= ?
             ORDER BY last_watched_at DESC NULLS LAST
             """,
-            (Status.WATCHING,),
+            (Status.WATCHING, today),
         ).fetchall()
         return [_from_row(ShelfEpisode, row) for row in rows]
 

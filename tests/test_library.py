@@ -52,13 +52,13 @@ def test_up_next_is_the_lowest_unwatched_episode_and_skips_specials(library: Lib
     title_id = a_show(library)
     library.set_state(title_id, TitleState(status=Status.WATCHING))
     for season, number in [(0, 1), (1, 1), (1, 2), (1, 3)]:
-        library.upsert_episode(title_id, Episode(season_number=season, episode_number=number))
+        library.upsert_episode(title_id, Episode(season_number=season, episode_number=number, air_date="2000-01-01"))
     # Watched out of order: 1 and 3, leaving a gap at 2.
     library.record_watch(title_id, Watch(watched_at="2020-01-01 00:00:00", episode=(1, 1)))
     library.record_watch(title_id, Watch(watched_at="2020-01-03 00:00:00", episode=(1, 3)))
     library.link_watches(title_id)
 
-    (row,) = library.up_next()
+    (row,) = library.up_next(today=TODAY)
     assert (row.season_number, row.episode_number) == (1, 2)
 
 
@@ -66,7 +66,7 @@ def test_up_next_ignores_titles_that_are_not_being_watched(library: Library) -> 
     title_id = a_show(library)
     library.set_state(title_id, TitleState(status=Status.COMPLETED))
     library.upsert_episode(title_id, Episode(season_number=1, episode_number=1))
-    assert library.up_next() == []
+    assert library.up_next(today=TODAY) == []
 
 
 def test_titles_can_be_filtered_by_status(library: Library) -> None:
@@ -338,3 +338,15 @@ def test_a_library_from_before_watch_later_is_upgraded_in_place(tmp_path: Path) 
         assert (row.status, row.rating) == (Status.WATCH_LATER, 8)
     with open_library(db_path) as library:
         assert library.conn.execute("PRAGMA user_version").fetchone()[0] == 1
+
+
+def test_up_next_leaves_out_a_next_episode_that_is_not_out(library: Library) -> None:
+    """Dune: Prophecy's season 2 is listed with no dates; Stick's next is next week."""
+    for name, air_date in [("Dune: Prophecy", None), ("Stick", "2026-06-22"), ("The Pitt", TODAY)]:
+        title_id = a_followed_show(library, name=name)
+        library.upsert_episode(title_id, Episode(season_number=1, episode_number=1, air_date="2020-01-01"))
+        library.upsert_episode(title_id, Episode(season_number=2, episode_number=1, air_date=air_date))
+        library.record_watch(title_id, Watch(watched_at="2020-01-02 00:00:00", episode=(1, 1)))
+        library.link_watches(title_id)
+
+    assert [(row.name, row.season_number) for row in library.up_next(today=TODAY)] == [("The Pitt", 2)]

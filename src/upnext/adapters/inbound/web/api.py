@@ -240,7 +240,7 @@ def set_status(title_id: Annotated[int, PathParam(gt=0, lt=2**63)], change: Stat
 
 @app.get("/api/up-next")
 def up_next(library: LibraryDep) -> list[UpNextItem]:
-    return [UpNextItem.model_validate(row, from_attributes=True) for row in library.up_next()]
+    return [UpNextItem.model_validate(row, from_attributes=True) for row in library.up_next(today=_today().isoformat())]
 
 
 def _today() -> date:
