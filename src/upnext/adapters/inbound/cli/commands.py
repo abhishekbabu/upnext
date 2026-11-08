@@ -7,6 +7,7 @@ exception and becomes an exit code and a line on stderr — in `main`, once.
 from __future__ import annotations
 
 import argparse
+import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -88,7 +89,36 @@ def serve(args: argparse.Namespace, settings: Settings) -> None:
     from upnext.adapters.inbound.web.api import app, get_settings
 
     app.dependency_overrides[get_settings] = lambda: settings
+    if not args.no_refresh:
+        refresh_in_background(settings)
     uvicorn.run(app, host=args.host or settings.host, port=args.port or settings.port)
+
+
+def refresh_in_background(settings: Settings) -> threading.Thread | None:
+    """Fetch every title from TMDB again, beside the server rather than before it.
+
+    The timeline is only as current as the last fetch, and a server start is
+    when someone is about to look at it. In a thread, so the page loads at once
+    and fills in as titles land: enrichment commits per title, and the thread
+    has its own connection. Skipped without a key — browsing never needed one.
+    """
+    if not settings.tmdb_api_key:
+        output.refresh_skipped()
+        return None
+
+    def refresh() -> None:
+        try:
+            catalog = bootstrap.build_catalog(settings)
+            with open_library(settings.db_path) as library:
+                titles = library.titles()
+                output.refreshing(len(titles))
+                output.refreshed(enrich(catalog, library, titles))
+        except UpnextError as exc:
+            output.error(f"Refresh stopped: {exc}")
+
+    thread = threading.Thread(target=refresh, name="refresh", daemon=True)
+    thread.start()
+    return thread
 
 
 def _row_id(value: str) -> int:
@@ -159,6 +189,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve = sub.add_parser("serve", help="Serve the API")
     p_serve.add_argument("--host")
     p_serve.add_argument("--port", type=int)
+    p_serve.add_argument("--no-refresh", action="store_true", help="Skip fetching every title from TMDB on start")
     p_serve.set_defaults(func=serve)
 
     return parser

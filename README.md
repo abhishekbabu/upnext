@@ -30,7 +30,7 @@ You need [`uv`](https://docs.astral.sh/uv/) (it fetches Python 3.15),
 just install                          # dependencies and git hooks
 cp .env.template .env                 # then add your TMDB key (below)
 just import ~/Documents/tv-time-data  # your TV Time export
-just enrich                           # fetch episode lists and artwork (--refresh later, for new seasons)
+just enrich                           # fetch episode lists and artwork
 just ui                               # http://localhost:8000
 ```
 
@@ -55,7 +55,7 @@ and how much of it is enriched.
 | `upnext relink` | Re-match watches against stored episode lists, without the network. |
 | `upnext move --title <id> --season <n> --to <tmdb_id> [--as-season <n>]` | Move a season's watches to the show they belong to, such as a spin-off filed as season 2 of its parent. |
 | `upnext stats` | Summarise the library. |
-| `upnext serve [--host --port]` | Serve the API, and the UI if it has been built. |
+| `upnext serve [--host --port] [--no-refresh]` | Serve the API, and the UI if it has been built. Refreshes every title from TMDB in the background on start, so new seasons show up. |
 
 Each has a `just` shortcut (`just import`, `just enrich`, …). The API's
 interactive docs are at `/docs`.
@@ -66,7 +66,7 @@ Settings come from the environment or `.env`.
 
 | Variable | Default | |
 | --- | --- | --- |
-| `UPNEXT_TMDB_API_KEY` | none | Needed for `enrich` and `move` |
+| `UPNEXT_TMDB_API_KEY` | none | Needed for `enrich`, `move` and the refresh on start |
 | `UPNEXT_DB_PATH` | `~/.upnext/library.db` | The library. Delete it and re-import to start over. |
 | `UPNEXT_TMDB_LANGUAGE` | `en-US` | Language for titles and overviews |
 | `UPNEXT_TMDB_MIN_INTERVAL_SECONDS` | `0.05` | Pause between TMDB requests |
