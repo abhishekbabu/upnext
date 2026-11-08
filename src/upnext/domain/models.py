@@ -66,6 +66,10 @@ class Episode:
     tmdb_id: int | None = None
 
 
+APP_SOURCE = "upnext"
+"""The `source` of a viewing marked in upnext itself rather than imported."""
+
+
 @dataclass(slots=True)
 class Watch:
     """One viewing. `episode` is None for a film."""
@@ -73,7 +77,7 @@ class Watch:
     watched_at: str
     episode: tuple[int, int] | None = None
     is_rewatch: bool = False
-    source: str = "upnext"
+    source: str = APP_SOURCE
     # The source's id for what was watched, where it has one. Distinguishes
     # two watches the source could not number — see schema.sql.
     source_episode_id: str | None = None
@@ -189,6 +193,10 @@ class EpisodeRow:
     watch_count: int = 0
     """Viewings, not a flag: a rewatch is 2, so the count survives the trip."""
 
+    marked_here: bool = False
+    """Whether any of those viewings was marked in upnext, and so can be undone
+    there. Imported history is the export's, not the app's to delete."""
+
 
 @dataclass(slots=True)
 class UnmatchedWatch:
@@ -210,7 +218,7 @@ class UnmatchedWatch:
 class ShelfEpisode:
     """One episode of one show, named the way a shelf lists it.
 
-    What both `up_next` and `airing_next` return. The two stay separate
+    What both `up_next` and `timeline` return. The two stay separate
     questions — a backlog and a schedule — but an episode beside its show's
     name and artwork is the same thing in either.
     """

@@ -92,8 +92,8 @@ export function shortDate(value: string | null, locale?: string): string {
 }
 
 /**
- * The heading one day of the airing calendar sits under: "Today", "Tomorrow",
- * or "Mon, 7 Sep".
+ * The heading one day of the timeline sits under: "Yesterday", "Today",
+ * "Tomorrow", or "Mon, 7 Sep".
  *
  * `today` is a parameter rather than `new Date()` for the same reason `locale`
  * is: a function that reads the clock cannot be asserted against, and this one
@@ -112,6 +112,7 @@ export function airingDay(airDate: string, today: string, locale?: string): stri
 
   const todayDate = utcDate(today);
   if (todayDate && date.getTime() - todayDate.getTime() === DAY_MS) return "Tomorrow";
+  if (todayDate && todayDate.getTime() - date.getTime() === DAY_MS) return "Yesterday";
 
   return date.toLocaleDateString(locale, {
     weekday: "short",

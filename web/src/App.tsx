@@ -2,13 +2,15 @@ import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { Moon, Sun } from "lucide-react";
 import { Library } from "@/panels/Library";
 import { Stats } from "@/panels/Stats";
+import { Timeline } from "@/panels/Timeline";
 import { Title } from "@/panels/Title";
 import { UpNext } from "@/panels/UpNext";
 import { useTheme } from "@/lib/useTheme";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { to: "/", label: "Up next" },
+  { to: "/", label: "Timeline" },
+  { to: "/up-next", label: "Up next" },
   { to: "/library", label: "Library" },
   { to: "/stats", label: "Stats" },
 ];
@@ -55,7 +57,8 @@ export default function App() {
 
       <main className="mx-auto max-w-(--container-page) px-5 py-8">
         <Routes>
-          <Route path="/" element={<UpNext />} />
+          <Route path="/" element={<Timeline />} />
+          <Route path="/up-next" element={<UpNext />} />
           <Route path="/library" element={<Library />} />
           <Route path="/titles/:id" element={<Title />} />
           <Route path="/stats" element={<Stats />} />

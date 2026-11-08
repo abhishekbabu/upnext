@@ -5,6 +5,7 @@ import { StatusBadge } from "@/components/ui/badge";
 import { Poster } from "@/components/ui/poster";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Empty, Failed, Loading } from "@/components/ui/state";
+import { WatchButton } from "@/components/ui/watch-button";
 import type { TitleEpisode, UnmatchedViewing } from "@/lib/api";
 import { episodeCode, progressOf, shortDate } from "@/lib/format";
 import { useTitle } from "@/lib/queries";
@@ -135,6 +136,22 @@ export function Title() {
                       <span className="hidden shrink-0 font-mono text-[10.5px] text-muted-foreground sm:inline">
                         {shortDate(episode.air_date)}
                       </span>
+                    )}
+                    {episode.marked_here ? (
+                      <WatchButton
+                        episodeId={episode.id}
+                        season={episode.season_number}
+                        episode={episode.episode_number}
+                        undo
+                      />
+                    ) : episode.watch_count === 0 && episode.air_date && episode.air_date <= data.today ? (
+                      <WatchButton
+                        episodeId={episode.id}
+                        season={episode.season_number}
+                        episode={episode.episode_number}
+                      />
+                    ) : (
+                      <span className="size-7 shrink-0" aria-hidden />
                     )}
                     <span className="w-14 shrink-0 text-right">
                       {episode.watch_count > 0 && (

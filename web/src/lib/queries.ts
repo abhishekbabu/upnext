@@ -5,7 +5,7 @@
  * the same thing share one fetch and one cache entry.
  */
 
-import { QueryClient, useQuery } from "@tanstack/react-query";
+import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Status } from "@/lib/api";
 
 /** The cache policy the app runs under, and the one its tests render with. */
@@ -47,8 +47,23 @@ export function useUpNext() {
   return useQuery({ queryKey: ["up-next"], queryFn: api.upNext });
 }
 
-export function useAiring() {
-  return useQuery({ queryKey: ["airing"], queryFn: api.airing });
+export function useTimeline() {
+  return useQuery({ queryKey: ["timeline"], queryFn: api.timeline });
+}
+
+/**
+ * Mark an episode watched, or take back the last time it was marked here.
+ *
+ * A viewing changes nearly every figure — the timeline, up next, the title's
+ * progress, the library, stats — so everything but the config is refetched
+ * rather than each cache entry being patched by hand.
+ */
+export function useWatch() {
+  const client = useQueryClient();
+  const refresh = () => client.invalidateQueries({ predicate: (query) => query.queryKey[0] !== "config" });
+  const mark = useMutation({ mutationFn: api.markWatched, onSuccess: refresh });
+  const unmark = useMutation({ mutationFn: api.unmarkWatched, onSuccess: refresh });
+  return { mark, unmark };
 }
 
 export function useStats() {

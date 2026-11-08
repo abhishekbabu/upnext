@@ -18,8 +18,8 @@ export type TitleDetail = Schemas["TitleDetail"];
 export type TitleEpisode = Schemas["TitleEpisode"];
 export type UnmatchedViewing = Schemas["UnmatchedViewing"];
 export type UpNextItem = Schemas["UpNextItem"];
-export type Airing = Schemas["Airing"];
-export type AiringItem = Schemas["AiringItem"];
+export type Timeline = Schemas["Timeline"];
+export type TimelineItem = Schemas["TimelineItem"];
 export type Stats = Schemas["Stats"];
 
 /** Every status, labelled, in the order a library is read: what you are on, then the rest. */
@@ -32,10 +32,10 @@ export const STATUS_LABELS: Record<Status, string> = {
 
 export const STATUSES = Object.keys(STATUS_LABELS) as Status[];
 
-async function request<T>(path: string): Promise<T> {
+async function request<T>(path: string, method: "GET" | "POST" | "DELETE" = "GET"): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(path, { headers: { accept: "application/json" } });
+    response = await fetch(path, { method, headers: { accept: "application/json" } });
   } catch {
     // fetch rejects only when the request never completed — the server is not
     // running, or the network is gone. Neither has a `detail` to show.
@@ -49,7 +49,8 @@ async function request<T>(path: string): Promise<T> {
     const detail = body?.detail;
     throw new Error(typeof detail === "string" ? detail : `${response.status} ${response.statusText}`);
   }
-  return response.json() as Promise<T>;
+  // A write answers 204, with no body to parse.
+  return (response.status === 204 ? undefined : response.json()) as Promise<T>;
 }
 
 export const api = {
@@ -58,6 +59,8 @@ export const api = {
     request<TitleSummary[]>(status ? `/api/titles?status=${encodeURIComponent(status)}` : "/api/titles"),
   title: (id: number) => request<TitleDetail>(`/api/titles/${id}`),
   upNext: () => request<UpNextItem[]>("/api/up-next"),
-  airing: () => request<Airing>("/api/airing"),
+  timeline: () => request<Timeline>("/api/timeline"),
+  markWatched: (episodeId: number) => request<void>(`/api/episodes/${episodeId}/watch`, "POST"),
+  unmarkWatched: (episodeId: number) => request<void>(`/api/episodes/${episodeId}/watch`, "DELETE"),
   stats: () => request<Stats>("/api/stats"),
 };
