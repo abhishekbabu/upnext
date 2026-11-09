@@ -19,6 +19,7 @@ from collections.abc import Iterator
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi import Path as PathParam
@@ -30,6 +31,7 @@ from starlette.types import Scope
 from upnext import __version__
 from upnext.adapters.outbound.store.library import Library, open_library
 from upnext.config.settings import PROJECT_ROOT, Settings
+from upnext.domain.analytics import analyse
 from upnext.domain.errors import NotFoundError, RemovalError
 from upnext.domain.models import Status
 
@@ -181,6 +183,62 @@ class Stats(Wire):
     by_status: dict[Status, int]
 
 
+class Period(Wire):
+    label: str
+    """`YYYY-MM` for a month, `YYYY` for a year."""
+    viewings: int
+    minutes: int
+    """Known runtime only, so a floor."""
+    titles: int
+
+
+class TitleTotal(Wire):
+    title_id: int
+    name: str
+    poster_path: str | None
+    viewings: int
+    minutes: int
+
+
+class Streak(Wire):
+    days: int
+    start: str
+    end: str
+
+
+class Day(Wire):
+    date: str
+    viewings: int
+
+
+class Binge(Wire):
+    title_id: int
+    name: str
+    date: str
+    viewings: int
+
+
+class Activity(Wire):
+    """When and what was watched, in the reader's timezone."""
+
+    timezone: str
+    dated: int
+    """Viewings whose timestamp says when they were watched."""
+    bulk: int
+    """Viewings logged in bulk — a season ticked off at once — and so left out
+    of every figure about when. They still count toward `top_titles`."""
+    months: list[Period]
+    """Every month from the first dated viewing to the last, empty ones included."""
+    years: list[Period]
+    rhythm: list[list[int]]
+    """Viewings by weekday (Monday first) then hour of the day."""
+    top_titles: list[TitleTotal]
+    longest_streak: Streak | None
+    current_streak: int
+    busiest_day: Day | None
+    biggest_binge: Binge | None
+
+
 def get_settings() -> Settings:
     return Settings()
 
@@ -304,6 +362,17 @@ def unmark_watched(episode_id: EpisodeId, library: LibraryDep) -> None:
 @app.get("/api/stats")
 def stats(library: LibraryDep) -> Stats:
     return Stats.model_validate(library.stats(), from_attributes=True)
+
+
+@app.get("/api/activity")
+def activity(library: LibraryDep, tz: Annotated[str, Query(max_length=64)] = "UTC") -> Activity:
+    """`tz` is an IANA zone name, the reader's own, so an hour of the day is theirs."""
+    try:
+        zone = ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=f"Unknown timezone {tz!r}") from exc
+    result = analyse(library.viewings(), tz=zone, today=datetime.now(zone).date())
+    return Activity.model_validate(result, from_attributes=True)
 
 
 # Everything Vite writes into assets/ carries a content hash in its filename, so

@@ -12,7 +12,7 @@ import { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createQueryClient } from "@/lib/queries";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Config, Stats, Timeline, TimelineItem, TitleDetail, TitleSummary, UpNextItem } from "@/lib/api";
+import type { Activity, Config, Stats, Timeline, TimelineItem, TitleDetail, TitleSummary, UpNextItem } from "@/lib/api";
 import { Library } from "@/panels/Library";
 import { Timeline as TimelinePanel } from "@/panels/Timeline";
 import { Stats as StatsPanel } from "@/panels/Stats";
@@ -88,6 +88,27 @@ const STATS: Stats = {
   last_watch: "2026-07-06 05:27:04",
   known_minutes: 150_540,
   by_status: { watching: 74, stopped: 51, completed: 27, watchlist: 9 },
+};
+
+const ACTIVITY: Activity = {
+  timezone: "America/Los_Angeles",
+  dated: 3,
+  bulk: 207,
+  months: [
+    { label: "2021-12", viewings: 2, minutes: 60, titles: 1 },
+    { label: "2022-01", viewings: 0, minutes: 0, titles: 0 },
+    { label: "2022-02", viewings: 1, minutes: 30, titles: 1 },
+  ],
+  years: [
+    { label: "2021", viewings: 2, minutes: 60, titles: 1 },
+    { label: "2022", viewings: 1, minutes: 30, titles: 1 },
+  ],
+  rhythm: Array.from({ length: 7 }, (_, day) => Array.from({ length: 24 }, (_, hour) => (day === 6 && hour === 22 ? 3 : 0))),
+  top_titles: [{ title_id: 67, name: "Cobra Kai", poster_path: null, viewings: 65, minutes: 2100 }],
+  longest_streak: { days: 10, start: "2018-05-13", end: "2018-05-22" },
+  current_streak: 0,
+  busiest_day: { date: "2021-01-01", viewings: 11 },
+  biggest_binge: { title_id: 67, name: "Cobra Kai", date: "2021-12-31", viewings: 10 },
 };
 
 /** A route that fails, with the body the server would send. */
@@ -377,7 +398,7 @@ describe("Library", () => {
 
 describe("Stats", () => {
   it("reads the runtime as a floor and the range as dates", async () => {
-    stubFetch({ "/api/stats": STATS });
+    stubFetch({ "/api/stats": STATS, "/api/activity": ACTIVITY });
     draw(<StatsPanel />);
 
     await waitFor(() => expect(screen.getByText("4,240")).toBeTruthy());
@@ -385,6 +406,31 @@ describe("Stats", () => {
     expect(screen.getByText("At least")).toBeTruthy();
     expect(screen.getByText("2,509 hours")).toBeTruthy();
     expect(screen.getByText("74")).toBeTruthy();
+  });
+
+  it("shows records, when things were watched, and what most", async () => {
+    stubFetch({ "/api/stats": STATS, "/api/activity": ACTIVITY });
+    draw(<StatsPanel />);
+
+    await waitFor(() => expect(screen.getByText("10 days")).toBeTruthy());
+    expect(screen.getByText("11 episodes")).toBeTruthy();
+    expect(screen.getByText(/207 viewings were logged in bulk/)).toBeTruthy();
+    // The busiest month and hour lead their charts until something is hovered.
+    expect(screen.getByText(/Dec 2021/)).toBeTruthy();
+    expect(screen.getByText(/Sunday, 10/)).toBeTruthy();
+    expect(screen.getByText(/Times in America\/Los Angeles/)).toBeTruthy();
+    // Newest year first.
+    const years = screen.getAllByRole("row").slice(1).map((row) => row.textContent);
+    expect(years[0]).toMatch(/^2022/);
+    expect(screen.getAllByRole("link", { name: "Cobra Kai" })).toHaveLength(2);
+  });
+
+  it("leaves the library's figures standing when the activity cannot load", async () => {
+    stubFetch({ "/api/stats": STATS, "/api/activity": new Fails({ detail: "Unknown timezone" }, 422) });
+    draw(<StatsPanel />);
+
+    await waitFor(() => expect(screen.getByText("Unknown timezone")).toBeTruthy());
+    expect(screen.getByText("4,240")).toBeTruthy();
   });
 });
 

@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { airingDay, episodeCode, hours, initials, poster, progressOf, shortDate } from "@/lib/format";
+import {
+  airingDay,
+  counted,
+  episodeCode,
+  hourName,
+  hours,
+  initials,
+  monthName,
+  poster,
+  progressOf,
+  shortDate,
+  weekdays,
+} from "@/lib/format";
 
 const BASE = "https://image.tmdb.org/t/p";
 
@@ -181,5 +193,39 @@ describe("initials", () => {
   it("always returns something, even for a name that is all punctuation", () => {
     expect(initials("?")).toBe("?");
     expect(initials("24")).toBe("2");
+  });
+});
+
+describe("counted", () => {
+  it("agrees the noun with the count", () => {
+    expect(counted(1, "day", "en-US")).toBe("1 day");
+    expect(counted(1200, "episode", "en-US")).toBe("1,200 episodes");
+    expect(counted(0, "episode", "en-US")).toBe("0 episodes");
+  });
+});
+
+describe("monthName", () => {
+  it("names a month label in the reader's locale", () => {
+    expect(monthName("2021-03", "en-US")).toBe("Mar 2021");
+    expect(monthName("2021-12", "en-GB")).toBe("Dec 2021");
+  });
+
+  it("leaves a label it cannot read as it is", () => {
+    expect(monthName("someday")).toBe("someday");
+  });
+});
+
+describe("weekdays", () => {
+  it("starts on Monday, as the API counts", () => {
+    expect(weekdays("en-US")).toEqual(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]);
+    expect(weekdays("en-US", "long")[6]).toBe("Sunday");
+  });
+});
+
+describe("hourName", () => {
+  it("names an hour the way the locale does", () => {
+    expect(hourName(22, "en-US")).toBe("10 PM");
+    expect(hourName(0, "en-US")).toBe("12 AM");
+    expect(hourName(22, "en-GB")).toBe("22");
   });
 });
