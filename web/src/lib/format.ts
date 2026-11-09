@@ -153,6 +153,35 @@ export function hours(minutes: number, locale?: string): string {
   return `${count(total, locale)} ${total === 1 ? "hour" : "hours"}`;
 }
 
+/** "11 episodes", "1 day": a count with its noun, agreeing. */
+export function counted(n: number, noun: string, locale?: string): string {
+  return `${count(n, locale)} ${n === 1 ? noun : `${noun}s`}`;
+}
+
+/** "Mar 2021" from a "2021-03" month label. */
+export function monthName(label: string, locale?: string): string {
+  const [year, month] = label.split("-").map(Number);
+  if (!year || !month) return label;
+  return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString(locale, {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** The days of the week, Monday first — the order the API counts them in. */
+export function weekdays(locale?: string, style: "short" | "long" = "short"): string[] {
+  // 1 January 2024 was a Monday.
+  return Array.from({ length: 7 }, (_, day) =>
+    new Date(Date.UTC(2024, 0, 1 + day)).toLocaleDateString(locale, { weekday: style, timeZone: "UTC" }),
+  );
+}
+
+/** "6 PM" or "18", however the reader's locale names an hour. */
+export function hourName(hour: number, locale?: string): string {
+  return new Date(Date.UTC(2024, 0, 1, hour)).toLocaleTimeString(locale, { hour: "numeric", timeZone: "UTC" });
+}
+
 /** Up to two initials from a title: "The Last of Us" -> "LU". */
 export function initials(name: string): string {
   const words = name

@@ -1,12 +1,17 @@
+import { Suspense, lazy } from "react";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 import { Moon, Sun } from "lucide-react";
 import { Library } from "@/panels/Library";
-import { Stats } from "@/panels/Stats";
+import { Loading } from "@/components/ui/state";
 import { Timeline } from "@/panels/Timeline";
 import { Title } from "@/panels/Title";
 import { UpNext } from "@/panels/UpNext";
 import { useTheme } from "@/lib/useTheme";
 import { cn } from "@/lib/utils";
+
+// Loaded when first visited: its charts are the most code of any page, and the
+// one page nobody opens the app to see first.
+const Stats = lazy(() => import("@/panels/Stats").then((module) => ({ default: module.Stats })));
 
 const NAV = [
   { to: "/", label: "Timeline" },
@@ -61,7 +66,14 @@ export default function App() {
           <Route path="/up-next" element={<UpNext />} />
           <Route path="/library" element={<Library />} />
           <Route path="/titles/:id" element={<Title />} />
-          <Route path="/stats" element={<Stats />} />
+          <Route
+            path="/stats"
+            element={
+              <Suspense fallback={<Loading />}>
+                <Stats />
+              </Suspense>
+            }
+          />
           {/* An address nobody wrote a route for is a mistyped link, not a
               blank page. */}
           <Route path="*" element={<Navigate to="/" replace />} />

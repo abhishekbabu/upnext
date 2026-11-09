@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from upnext.adapters.outbound.store.db import connect
+from upnext.domain.analytics import TimedViewing
 from upnext.domain.errors import NotFoundError, RemovalError
 from upnext.domain.matching import CatalogEntry, match
 from upnext.domain.models import (
@@ -595,6 +596,20 @@ class Library:
             """,
             (Status.WATCHING, Status.COMPLETED, episode_id, *FINISHED_RUNS),
         )
+
+    def viewings(self) -> list[TimedViewing]:
+        """Every viewing with its title and runtime, for `analyse`."""
+        rows = self.conn.execute(
+            """
+            SELECT w.title_id, t.name, t.poster_path, w.watched_at,
+                   COALESCE(e.runtime, t.runtime) AS minutes
+              FROM watches w
+              JOIN titles t ON t.id = w.title_id
+              LEFT JOIN episodes e ON e.id = w.episode_id
+             ORDER BY w.watched_at, w.id
+            """
+        ).fetchall()
+        return [_from_row(TimedViewing, row) for row in rows]
 
     def stats(self) -> LibraryStats:
         totals = self.conn.execute(

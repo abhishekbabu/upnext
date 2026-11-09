@@ -12,7 +12,7 @@ library is one SQLite file on your own machine.
 - **Up next**: the next unwatched episode of every show you're part-way through. Search and sort it like the library.
 - **Library**: everything you've watched or plan to, filterable by status: watching, watch later (started but paused), watchlist (not started), completed, stopped. Search by name, sort by recently watched, name, newest or progress. A show that has ended is filed completed once you've watched every episode. Change a show's status on its page, or remove a show you haven't watched any of; re-imports leave a removed show out.
 - **Title pages**: every episode by season, what you've seen, and any viewings TMDB's list can't account for.
-- **Stats**: totals, date range and time watched.
+- **Stats**: totals and time watched; records (longest streak, busiest day, biggest binge); episodes by month and by year; a weekday-by-hour heatmap in your timezone; and your most-watched shows. History logged in bulk, such as a season ticked off at once, counts toward totals but not toward anything about when.
 - **Imports from TV Time**: reads its GDPR export offline, and re-importing the same export changes nothing.
 - **Light and dark mode**, with no account and no telemetry.
 

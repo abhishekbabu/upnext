@@ -266,3 +266,17 @@ def test_a_title_can_be_removed_only_while_nobody_has_watched_it(api: TestClient
     assert api.delete(f"/api/titles/{titles['Arrow']}").status_code == 204
     assert api.get(f"/api/titles/{titles['Arrow']}").status_code == 404
     assert api.delete(f"/api/titles/{titles['Arrow']}").status_code == 404
+
+
+def test_activity_is_read_in_the_timezone_asked_for(api: TestClient) -> None:
+    """Friends was watched at 01:10 UTC on 12 May 2018: the evening before, in Los Angeles."""
+    body = api.get("/api/activity", params={"tz": "America/Los_Angeles"}).json()
+
+    assert body["timezone"] == "America/Los_Angeles"
+    assert body["busiest_day"] == {"date": "2018-05-11", "viewings": 1}
+    assert body["top_titles"][0]["minutes"] == 22
+
+
+def test_an_unknown_timezone_is_rejected(api: TestClient) -> None:
+    assert api.get("/api/activity", params={"tz": "Mars/Olympus_Mons"}).status_code == 422
+    assert api.get("/api/activity", params={"tz": "../etc/passwd"}).status_code == 422

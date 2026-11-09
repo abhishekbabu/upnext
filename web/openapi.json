@@ -317,10 +317,181 @@
           }
         }
       }
+    },
+    "/api/activity": {
+      "get": {
+        "summary": "Activity",
+        "description": "`tz` is an IANA zone name, the reader's own, so an hour of the day is theirs.",
+        "operationId": "activity_api_activity_get",
+        "parameters": [
+          {
+            "name": "tz",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "default": "UTC",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Activity"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "Activity": {
+        "properties": {
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "dated": {
+            "type": "integer",
+            "title": "Dated",
+            "description": "Viewings whose timestamp says when they were watched."
+          },
+          "bulk": {
+            "type": "integer",
+            "title": "Bulk",
+            "description": "Viewings logged in bulk \u2014 a season ticked off at once \u2014 and so left out\nof every figure about when. They still count toward `top_titles`."
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/Period"
+            },
+            "type": "array",
+            "title": "Months",
+            "description": "Every month from the first dated viewing to the last, empty ones included."
+          },
+          "years": {
+            "items": {
+              "$ref": "#/components/schemas/Period"
+            },
+            "type": "array",
+            "title": "Years"
+          },
+          "rhythm": {
+            "items": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Rhythm",
+            "description": "Viewings by weekday (Monday first) then hour of the day."
+          },
+          "top_titles": {
+            "items": {
+              "$ref": "#/components/schemas/TitleTotal"
+            },
+            "type": "array",
+            "title": "Top Titles"
+          },
+          "longest_streak": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Streak"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_streak": {
+            "type": "integer",
+            "title": "Current Streak"
+          },
+          "busiest_day": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Day"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "biggest_binge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Binge"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "timezone",
+          "dated",
+          "bulk",
+          "months",
+          "years",
+          "rhythm",
+          "top_titles",
+          "longest_streak",
+          "current_streak",
+          "busiest_day",
+          "biggest_binge"
+        ],
+        "title": "Activity",
+        "description": "When and what was watched, in the reader's timezone."
+      },
+      "Binge": {
+        "properties": {
+          "title_id": {
+            "type": "integer",
+            "title": "Title Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "viewings": {
+            "type": "integer",
+            "title": "Viewings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title_id",
+          "name",
+          "date",
+          "viewings"
+        ],
+        "title": "Binge"
+      },
       "Config": {
         "properties": {
           "image_base": {
@@ -336,6 +507,24 @@
         "title": "Config",
         "description": "What the client needs to know about this installation to render at all."
       },
+      "Day": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "viewings": {
+            "type": "integer",
+            "title": "Viewings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "viewings"
+        ],
+        "title": "Day"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -348,6 +537,36 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "Period": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "`YYYY-MM` for a month, `YYYY` for a year."
+          },
+          "viewings": {
+            "type": "integer",
+            "title": "Viewings"
+          },
+          "minutes": {
+            "type": "integer",
+            "title": "Minutes",
+            "description": "Known runtime only, so a floor."
+          },
+          "titles": {
+            "type": "integer",
+            "title": "Titles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "viewings",
+          "minutes",
+          "titles"
+        ],
+        "title": "Period"
       },
       "Stats": {
         "properties": {
@@ -437,6 +656,29 @@
           "status"
         ],
         "title": "StatusChange"
+      },
+      "Streak": {
+        "properties": {
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "start": {
+            "type": "string",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days",
+          "start",
+          "end"
+        ],
+        "title": "Streak"
       },
       "Timeline": {
         "properties": {
@@ -830,6 +1072,46 @@
         ],
         "title": "TitleSummary",
         "description": "A title as a shelf sees it: enough for a poster and its progress."
+      },
+      "TitleTotal": {
+        "properties": {
+          "title_id": {
+            "type": "integer",
+            "title": "Title Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "poster_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Path"
+          },
+          "viewings": {
+            "type": "integer",
+            "title": "Viewings"
+          },
+          "minutes": {
+            "type": "integer",
+            "title": "Minutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title_id",
+          "name",
+          "poster_path",
+          "viewings",
+          "minutes"
+        ],
+        "title": "TitleTotal"
       },
       "UnmatchedViewing": {
         "properties": {

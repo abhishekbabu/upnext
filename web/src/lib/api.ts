@@ -21,6 +21,9 @@ export type UpNextItem = Schemas["UpNextItem"];
 export type Timeline = Schemas["Timeline"];
 export type TimelineItem = Schemas["TimelineItem"];
 export type Stats = Schemas["Stats"];
+export type Activity = Schemas["Activity"];
+export type Period = Schemas["Period"];
+export type TitleTotal = Schemas["TitleTotal"];
 
 /** Every status, labelled, in the order a library is read: what you are on, then the rest. */
 export const STATUS_LABELS: Record<Status, string> = {
@@ -71,4 +74,5 @@ export const api = {
   setStatus: ({ titleId, status }: { titleId: number; status: Status }) =>
     request<void>(`/api/titles/${titleId}/status`, "PUT", { status }),
   stats: () => request<Stats>("/api/stats"),
+  activity: (timezone: string) => request<Activity>(`/api/activity?tz=${encodeURIComponent(timezone)}`),
 };

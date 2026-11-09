@@ -25,7 +25,7 @@ an adapter has, name it as a port.
 
 ```
 domain/       models.py, errors.py, ports.py,  — the vocabulary, the interfaces,
-              matching.py                        and the rules for joining the two lists
+              matching.py, analytics.py          the rules for joining the two lists, and the stats
 application/  enrichment.py, importing.py      — use cases, ports-only collaborators
 adapters/inbound/    cli/, web/                — the only place that prints or exits
 adapters/outbound/   catalog/, importers/, store/
@@ -118,6 +118,12 @@ episode. A pinned status is left alone; a show still running never qualifies.
 **Removing a title never removes history.** Only a title with no viewings can be
 removed (`remove_title`, else `RemovalError`), and `removed_titles` remembers it
 so `import_export` leaves it out of every later import.
+
+**A timestamp is when a viewing was logged.** Usually that is when it was
+watched; for a season ticked off at once it is not. `analyse` sets aside runs of
+`BULK_RUN` viewings logged under `BULK_GAP` apart, and counts them toward what was
+watched but never toward when (months, hours, streaks, records). Hours and days are
+the reader's: `/api/activity` takes an IANA `tz` and nothing about when is computed in UTC.
 
 **The web layer's connections cross threads.** `open_library(...,
 same_thread_only=False)` in `get_library`, and nowhere else. FastAPI hands the

@@ -87,3 +87,12 @@ export function useSetStatus() {
 export function useStats() {
   return useQuery({ queryKey: ["stats"], queryFn: api.stats });
 }
+
+/**
+ * When and what was watched, read in the browser's own timezone — an hour of
+ * the day means nothing in UTC to someone in Los Angeles.
+ */
+export function useActivity() {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return useQuery({ queryKey: ["activity", timezone], queryFn: () => api.activity(timezone) });
+}

@@ -154,10 +154,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Activity
+         * @description `tz` is an IANA zone name, the reader's own, so an hour of the day is theirs.
+         */
+        get: operations["activity_api_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * Activity
+         * @description When and what was watched, in the reader's timezone.
+         */
+        Activity: {
+            /** Timezone */
+            timezone: string;
+            /**
+             * Dated
+             * @description Viewings whose timestamp says when they were watched.
+             */
+            dated: number;
+            /**
+             * Bulk
+             * @description Viewings logged in bulk — a season ticked off at once — and so left out
+             *     of every figure about when. They still count toward `top_titles`.
+             */
+            bulk: number;
+            /**
+             * Months
+             * @description Every month from the first dated viewing to the last, empty ones included.
+             */
+            months: components["schemas"]["Period"][];
+            /** Years */
+            years: components["schemas"]["Period"][];
+            /**
+             * Rhythm
+             * @description Viewings by weekday (Monday first) then hour of the day.
+             */
+            rhythm: number[][];
+            /** Top Titles */
+            top_titles: components["schemas"]["TitleTotal"][];
+            longest_streak: components["schemas"]["Streak"] | null;
+            /** Current Streak */
+            current_streak: number;
+            busiest_day: components["schemas"]["Day"] | null;
+            biggest_binge: components["schemas"]["Binge"] | null;
+        };
+        /** Binge */
+        Binge: {
+            /** Title Id */
+            title_id: number;
+            /** Name */
+            name: string;
+            /** Date */
+            date: string;
+            /** Viewings */
+            viewings: number;
+        };
         /**
          * Config
          * @description What the client needs to know about this installation to render at all.
@@ -171,10 +240,34 @@ export interface components {
              */
             image_base: string;
         };
+        /** Day */
+        Day: {
+            /** Date */
+            date: string;
+            /** Viewings */
+            viewings: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** Period */
+        Period: {
+            /**
+             * Label
+             * @description `YYYY-MM` for a month, `YYYY` for a year.
+             */
+            label: string;
+            /** Viewings */
+            viewings: number;
+            /**
+             * Minutes
+             * @description Known runtime only, so a floor.
+             */
+            minutes: number;
+            /** Titles */
+            titles: number;
         };
         /** Stats */
         Stats: {
@@ -214,6 +307,15 @@ export interface components {
         /** StatusChange */
         StatusChange: {
             status: components["schemas"]["Status"];
+        };
+        /** Streak */
+        Streak: {
+            /** Days */
+            days: number;
+            /** Start */
+            start: string;
+            /** End */
+            end: string;
         };
         /** Timeline */
         Timeline: {
@@ -380,6 +482,19 @@ export interface components {
              *     does not list these" apart from "there is no list yet".
              */
             enriched_at: string | null;
+        };
+        /** TitleTotal */
+        TitleTotal: {
+            /** Title Id */
+            title_id: number;
+            /** Name */
+            name: string;
+            /** Poster Path */
+            poster_path: string | null;
+            /** Viewings */
+            viewings: number;
+            /** Minutes */
+            minutes: number;
         };
         /**
          * UnmatchedViewing
@@ -705,6 +820,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Stats"];
+                };
+            };
+        };
+    };
+    activity_api_activity_get: {
+        parameters: {
+            query?: {
+                tz?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Activity"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
