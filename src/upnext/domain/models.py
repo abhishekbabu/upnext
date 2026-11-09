@@ -22,7 +22,7 @@ class Status(StrEnum):
 
     WATCHING = "watching"
     WATCH_LATER = "watch_later"
-    """Started, and paused rather than dropped. Off the timeline until resumed."""
+    """Started, and paused rather than dropped ("Paused" in the UI). Off the timeline until resumed."""
     WATCHLIST = "watchlist"
     """Not started yet; meant to be."""
     COMPLETED = "completed"
