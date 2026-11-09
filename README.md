@@ -19,7 +19,7 @@ library is one SQLite file on your own machine.
 | | |
 | --- | --- |
 | ![Library](docs/screenshots/library.jpg) | ![A title](docs/screenshots/title.jpg) |
-| ![Timeline](docs/screenshots/airing.jpg) | ![Stats](docs/screenshots/stats.png) |
+| ![Timeline](docs/screenshots/airing.jpg) | ![Stats](docs/screenshots/stats.jpg) |
 
 ## Quick start
 
