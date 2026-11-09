@@ -39,6 +39,10 @@
      difference that CVD collapses. */
   --color-ok: light-dark(#00745a, #2dd4a7);
 
+  /* `paused` is a show started and set aside: warm, so it reads apart from the
+     neutral `watching` and the cool `ok` and accent beside it in a list. */
+  --color-paused: light-dark(#a35200, #ffb224);
+
   /* The ground a poster sits on, seen while artwork loads and behind any
      transparency: a quiet neutral in each mode, so a dark shelf is not a row
      of light rectangles before the images arrive. */

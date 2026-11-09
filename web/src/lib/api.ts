@@ -28,7 +28,7 @@ export type TitleTotal = Schemas["TitleTotal"];
 /** Every status, labelled, in the order a library is read: what you are on, then the rest. */
 export const STATUS_LABELS: Record<Status, string> = {
   watching: "Watching",
-  watch_later: "Watch later",
+  watch_later: "Paused",
   watchlist: "Watchlist",
   completed: "Completed",
   stopped: "Stopped",

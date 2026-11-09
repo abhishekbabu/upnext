@@ -10,7 +10,7 @@ import { groupBy } from "@/lib/utils";
 
 /**
  * The home page: unwatched episodes of shows you are watching, from the last
- * month through everything scheduled, by air date. Paused (watch later),
+ * month through everything scheduled, by air date. Paused (`watch_later`),
  * unstarted, stopped and archived shows stay off it.
  *
  * A list to work down. An episode that is out has a button to mark it, and
